@@ -8,7 +8,9 @@ packages = [{ include = "scripts" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+
 pandas = "^2.2.3"
+requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.9.4"
