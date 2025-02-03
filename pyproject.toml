@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "bitstamp-btcusd-minute-data"
 version = "0.1.0"
-description = "Daily updates of Bitstamp BTC/USD 1 minute OHLC data with historical data since 2012"
+description = "Daily updates of Bitstamp BTC/USD 1-minute OHLC data, with historical data since 2012"
 authors = ["Mourits de Beer <ff137@proton.me>"]
 readme = "README.md"
 packages = [{ include = "scripts" }]
