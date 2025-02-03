@@ -104,7 +104,7 @@ def fetch_and_append_missing_data(
         limit = min(1000, remaining_minutes)
 
         if limit <= 0:
-            logger.warning(f"Limit is {limit}, breaking to prevent bad request")
+            logger.error(f"Limit is {limit}, breaking to prevent bad request")
             break
 
         # Calculate window end - ensure `limit` records are fetched
@@ -202,7 +202,7 @@ def validate_data_integrity(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Fill missing minutes
+# Fill missing minutes using forward fill strategy
 def fill_missing_minutes(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop_duplicates(subset="timestamp", keep="last").copy()
     df.set_index("timestamp", inplace=True)
