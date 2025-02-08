@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: false # No need to fetch the bulk data for this workflow
+          fetch-depth: 2 # Fetch enough history to reference HEAD~
 
       # Step 2: Set up Python 3.12
       - name: Set up Python 3.12
@@ -37,13 +38,39 @@ jobs:
       # Step 5: Run the Python script to fetch and process data
       - name: Run data processing script
         run: |
-          poetry run python scripts/update_data.py
+          set -o pipefail
+          OUTPUT=$(poetry run python scripts/update_data.py 2>&1 | tee script_output.log)
+          if [[ "$OUTPUT" == *"Successfully saved"* ]]; then
+            echo "SCRIPT_SUCCESS=true" >> $GITHUB_ENV
+          else
+            echo "SCRIPT_SUCCESS=false" >> $GITHUB_ENV
+          fi
 
-      # Step 6: Commit and push the updated daily dataset
+      # Step 6: Check previous commit message
+      - name: Check previous commit message
+        if: env.SCRIPT_SUCCESS == 'true'
+        run: |
+          LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+          if [[ "$LAST_COMMIT_MSG" == ":package: Daily update"* ]]; then
+            echo "Previous commit is a daily update. Preparing to overwrite."
+            echo "RESET_PREVIOUS_COMMIT=true" >> $GITHUB_ENV
+          else
+            echo "RESET_PREVIOUS_COMMIT=false" >> $GITHUB_ENV
+          fi
+
+      # Step 7: Commit and force push if previous commit was a daily update
       - name: Commit and Push Updates
+        if: env.SCRIPT_SUCCESS == 'true'
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          if [ "$RESET_PREVIOUS_COMMIT" == "true" ]; then
+            git reset HEAD~ # Drop the previous commit
+          fi
           git add data/recent/btcusd_bitstamp_1min_latest.csv
           git commit -m ":package: Daily update: $(date -u +'%Y-%m-%d')"
-          git push
+          if [ "$RESET_PREVIOUS_COMMIT" == "true" ]; then
+            git push -f origin main # Force push to overwrite the previous commit
+          else
+            git push origin main
+          fi
