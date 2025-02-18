@@ -4,11 +4,11 @@
 
 ## Project Overview
 
-This repository provides up-to-date Bitcoin (BTC/USD) 1-minute OHLC candle data from Bitstamp.
+This repository provides historical and up-to-date Bitcoin (BTC/USD) 1-minute OHLC candle data from Bitstamp.
 
 ## Bulk Historical Data
 
-The historical dataset is saved in `data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz`.
+The historical dataset is saved in [data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz](data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz).
 
 Some facts about the data:
 
@@ -33,7 +33,7 @@ Below is a preview of the first and last two rows of the bulk dataset:
 
 A daily GitHub action runs at midnight UTC to fetch the latest data and append it to a separate, daily update file.
 
-The daily updates (since the bulk data) are saved in `data/recent/btcusd_bitstamp_1min_latest.csv`.
+The daily updates (since the bulk data) are saved in [data/recent/btcusd_bitstamp_1min_latest.csv](data/recent/btcusd_bitstamp_1min_latest.csv).
 
 ## Want to Know More?
 
@@ -41,4 +41,4 @@ See [scripts/README.md](scripts/README.md) for more information on how this data
 [.github/workflows/update-automation.yml](.github/workflows/update-automation.yml) and
 [scripts/update_data.py](scripts/update_data.py) if you are curious about how the data is processed and kept up-to-date.
 
-We hope this repo makes your life easier!
+We hope this repo makes your life easier! If it does, please give us a star! ⭐
