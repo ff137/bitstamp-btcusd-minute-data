@@ -40,7 +40,15 @@ git clone https://github.com/ff137/bitstamp-btcusd-minute-data
 cd bitstamp-btcusd-minute-data
 ```
 
-Some time passes and you want to fetch the new daily updates. Perform a force pull:
+You can also [download the repository as a zip file](https://github.com/ff137/bitstamp-btcusd-minute-data/archive/refs/heads/main.zip) if you don't have git.
+Or, just download the individual datasets:
+
+- [data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz](https://github.com/ff137/bitstamp-btcusd-minute-data/blob/main/data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz)
+- [data/updates/btcusd_bitstamp_1min_latest.csv](https://github.com/ff137/bitstamp-btcusd-minute-data/blob/main/data/updates/btcusd_bitstamp_1min_latest.csv)
+
+## Keeping the Data Up-to-Date
+
+Some time passes and you want to fetch the new daily updates. Using git, perform a force pull:
 
 ```bash
 git fetch upstream
@@ -50,16 +58,15 @@ git reset --hard upstream/main  # This is needed instead of `git pull`
 
 ## Working with the Data in Python
 
-Assuming you already have [Python installed](https://www.python.org/downloads/release/python-3129/),
+Assuming you have [Python installed](https://www.python.org/downloads/release/python-3129/),
 you can install Poetry and the project dependencies:
 
 ```bash
 python -m venv venv  # Create a new virtual environment
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
-# Then, install Poetry, and install the project dependencies:
-pip install poetry
-poetry install
+pip install poetry  # Install Poetry
+poetry install  # Install the project dependencies
 ```
 
 We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity:
