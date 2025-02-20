@@ -4,14 +4,9 @@ import sys
 import pandas as pd
 
 
-def load_bulk_data(bulk_data_path: str) -> pd.DataFrame:
-    """Load the bulk dataset."""
     try:
-        df = pd.read_csv(bulk_data_path)
-        print(f"Loaded bulk data with {len(df)} records.")
         return df
     except Exception as e:
-        print(f"Error loading bulk data: {e}")
         sys.exit(1)
 
 
@@ -64,13 +59,6 @@ def print_sample_rows(df: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    # Define the path to the bulk data
-    bulk_data_path = os.path.join(
-        "data", "historical", "btcusd_bitstamp_1min_2012-2025.csv"
-    )
-
-    # Load the bulk data
-    df = load_bulk_data(bulk_data_path)
 
     # Get and print the timestamp range
     get_timestamp_range(df)

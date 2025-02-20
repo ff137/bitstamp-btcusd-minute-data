@@ -67,7 +67,7 @@ jobs:
           if [ "$RESET_PREVIOUS_COMMIT" == "true" ]; then
             git reset HEAD~ # Drop the previous commit
           fi
-          git add data/recent/btcusd_bitstamp_1min_latest.csv
+          git add data/updates/btcusd_bitstamp_1min_latest.csv
           git commit -m ":package: Daily update: $(date -u +'%Y-%m-%d')"
           if [ "$RESET_PREVIOUS_COMMIT" == "true" ]; then
             git push -f origin main # Force push to overwrite the previous commit

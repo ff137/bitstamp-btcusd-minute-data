@@ -44,4 +44,4 @@ python scripts/update_data.py
 ```
 
 This will save Bitstamp data since the bulk data was last updated in a separate file,
-located in `data/recent/btcusd_bitstamp_1min_latest.csv`.
+located in `data/updates/btcusd_bitstamp_1min_latest.csv`.
