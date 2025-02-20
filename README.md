@@ -36,8 +36,8 @@ The daily updates (since the bulk data) are saved in [data/updates/btcusd_bitsta
 The simplest way to use the data is to clone the repository:
 
 ```bash
-git clone https://github.com/ff137/bitstamp-btc-usd-1min
-cd bitstamp-btc-usd-1min
+git clone https://github.com/ff137/bitstamp-btcusd-minute-data
+cd bitstamp-btcusd-minute-data
 ```
 
 Some time passes and you want to fetch the new daily updates. Perform a force pull:
@@ -62,7 +62,7 @@ pip install poetry
 poetry install
 ```
 
-We have a sample script for you to inspect the data integrity:
+We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity:
 
 ```bash
 python -m scripts.inspect_data merged
@@ -72,13 +72,12 @@ python -m scripts.inspect_data merged
 
 ## Python Template for Loading the Data
 
-If you need a template for loading the data into a single DataFrame:
+If you need a basic template for just loading the data into a single DataFrame:
 
 ```python
 import pandas as pd
 
 # Load historical and recent data
-
 DATA_DIR = 'data'
 df_hist = pd.read_csv(
     f'{DATA_DIR}/historical/btcusd_bitstamp_1min_2012-2025.csv.gz',
@@ -89,7 +88,6 @@ df_recent = pd.read_csv(
 )
 
 # Combine the datasets
-
 df = pd.concat([df_hist, df_recent], ignore_index=True)
 df.info()
 ```
@@ -100,9 +98,9 @@ df.info()
 
 See [scripts/README.md](scripts/README.md) for more information on how this data was onboarded.
 
-Go to
-[.github/workflows/update-automation.yml](.github/workflows/update-automation.yml) and
-[scripts/update_data.py](scripts/update_data.py) if you are curious about how the data is processed and kept up-to-date.
+Go to [scripts/update_data.py](scripts/update_data.py) and
+[.github/workflows/update-automation.yml](.github/workflows/update-automation.yml)
+if you are curious about how the data is processed and kept up-to-date.
 
 ## Support
 
