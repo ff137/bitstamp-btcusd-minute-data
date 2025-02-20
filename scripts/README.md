@@ -43,5 +43,9 @@ Now you're ready to run the update script:
 python scripts/update_data.py
 ```
 
-This will save Bitstamp data since the bulk data was last updated in a separate file,
+This will save Bitstamp data since the bulk, historical dataset was last updated in a separate file,
 located in `data/updates/btcusd_bitstamp_1min_latest.csv`.
+
+## Want to Know More?
+
+See [.github/workflows/update-automation.yml](../.github/workflows/update-automation.yml) for how the data is kept up-to-date.
