@@ -2,7 +2,7 @@ name: Fetch and Merge Crypto Data
 
 on:
   schedule:
-    - cron: "1 0 * * *" # Runs daily at 00:01 UTC
+    - cron: "0 0 * * *" # Runs daily at 00:00 UTC
   workflow_dispatch: # Allows manual triggering from the GitHub UI
 
 jobs:
