@@ -1,9 +1,5 @@
 # Bitstamp BTC/USD 1-minute OHLC Data
 
-> Forked from [mczielinski/kaggle-bitcoin](https://github.com/mczielinski/kaggle-bitcoin)
-
-## Project Overview
-
 This repository provides historical and up-to-date Bitcoin (BTC/USD) 1-minute OHLC candle data from Bitstamp.
 
 ## Bulk Historical Data
@@ -33,12 +29,83 @@ Below is a preview of the first and last two rows of the bulk dataset:
 
 A daily GitHub action runs at midnight UTC to fetch the latest data and append it to a separate, daily update file.
 
-The daily updates (since the bulk data) are saved in [data/recent/btcusd_bitstamp_1min_latest.csv](data/recent/btcusd_bitstamp_1min_latest.csv).
+The daily updates (since the bulk data) are saved in [data/updates/btcusd_bitstamp_1min_latest.csv](data/updates/btcusd_bitstamp_1min_latest.csv).
 
-## Want to Know More?
+## How Can I Use This Data?
 
-See [scripts/README.md](scripts/README.md) for more information on how this data was onboarded, and go to
+The simplest way to use the data is to clone the repository:
+
+```bash
+git clone https://github.com/ff137/bitstamp-btc-usd-1min
+cd bitstamp-btc-usd-1min
+```
+
+Some time passes and you want to fetch the new daily updates. Perform a force pull:
+
+```bash
+git fetch upstream
+git reset --hard upstream/main  # This is needed instead of `git pull`
+# because the daily update file is overwritten each day to maintain a clean git history:
+```
+
+## Working with the Data in Python
+
+Assuming you already have [Python installed](https://www.python.org/downloads/release/python-3129/),
+you can install Poetry and the project dependencies:
+
+```bash
+python -m venv venv  # Create a new virtual environment
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+
+# Then, install Poetry, and install the project dependencies:
+pip install poetry
+poetry install
+```
+
+We have a sample script for you to inspect the data integrity:
+
+```bash
+python -m scripts.inspect_data merged
+# python -m scripts.inspect_data bulk
+# python -m scripts.inspect_data updated
+```
+
+## Python Template for Loading the Data
+
+If you need a template for loading the data into a single DataFrame:
+
+```python
+import pandas as pd
+
+# Load historical and recent data
+
+DATA_DIR = 'data'
+df_hist = pd.read_csv(
+    f'{DATA_DIR}/historical/btcusd_bitstamp_1min_2012-2025.csv.gz',
+    compression='gzip'
+)
+df_recent = pd.read_csv(
+    f'{DATA_DIR}/updates/btcusd_bitstamp_1min_latest.csv'
+)
+
+# Combine the datasets
+
+df = pd.concat([df_hist, df_recent], ignore_index=True)
+df.info()
+```
+
+## Want to Know More About this Repo?
+
+> Forked from [mczielinski/kaggle-bitcoin](https://github.com/mczielinski/kaggle-bitcoin) and fixed some issues.
+
+See [scripts/README.md](scripts/README.md) for more information on how this data was onboarded.
+
+Go to
 [.github/workflows/update-automation.yml](.github/workflows/update-automation.yml) and
 [scripts/update_data.py](scripts/update_data.py) if you are curious about how the data is processed and kept up-to-date.
+
+## Support
+
+If you need any help or have any questions, please feel free to open an issue or contact me directly.
 
 We hope this repo makes your life easier! If it does, please give us a star! ⭐
