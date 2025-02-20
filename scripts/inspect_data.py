@@ -4,9 +4,14 @@ import sys
 import pandas as pd
 
 
+def load_data(data_path: str) -> pd.DataFrame:
+    """Load the dataset from the given path."""
     try:
+        df = pd.read_csv(data_path)
+        print(f"Loaded data with {len(df)} records from {data_path}.")
         return df
     except Exception as e:
+        print(f"Error loading data from {data_path}: {e}")
         sys.exit(1)
 
 
@@ -59,6 +64,29 @@ def print_sample_rows(df: pd.DataFrame) -> None:
 
 
 def main() -> None:
+    # Determine which dataset to inspect based on command-line argument
+    data_type = sys.argv[1] if len(sys.argv) > 1 else "merged"
+
+    # Define paths to the datasets
+    data_paths = {
+        "bulk": os.path.join("data", "historical", "btcusd_bitstamp_1min_2012-2025.csv"),
+        "updated": os.path.join("data", "updates", "btcusd_bitstamp_1min_latest.csv")
+    }
+
+    # Load and merge datasets if 'merged' is selected
+    if data_type == "merged":
+        bulk_df = load_data(data_paths["bulk"])
+        updated_df = load_data(data_paths["updated"])
+        df = pd.concat([bulk_df, updated_df])
+        print(f"Merged data with {len(df)} records.")
+    else:
+        # Get the path for the selected dataset
+        data_path = data_paths.get(data_type)
+        if not data_path:
+            print(f"Invalid data type specified: {data_type}. Choose from 'bulk', 'updated', or 'merged'.")
+            sys.exit(1)
+        # Load the selected data
+        df = load_data(data_path)
 
     # Get and print the timestamp range
     get_timestamp_range(df)
