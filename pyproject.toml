@@ -9,7 +9,7 @@ repository = "https://github.com/ff137/bitstamp-btcusd-minute-data"
 packages = [{ include = "scripts" }]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.9"
 
 pandas = "^2.2.3"
 requests = "^2.32.3"
