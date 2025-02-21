@@ -40,21 +40,22 @@ git clone https://github.com/ff137/bitstamp-btcusd-minute-data
 cd bitstamp-btcusd-minute-data
 ```
 
-You can also [download the repository as a zip file](https://github.com/ff137/bitstamp-btcusd-minute-data/archive/refs/heads/main.zip) if you don't have git.
+If you don't have git, you can also [download the repository as a zip file](https://github.com/ff137/bitstamp-btcusd-minute-data/archive/refs/heads/main.zip).
 Or, just download the individual datasets:
 
 - [data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz](https://github.com/ff137/bitstamp-btcusd-minute-data/blob/main/data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz)
 - [data/updates/btcusd_bitstamp_1min_latest.csv](https://github.com/ff137/bitstamp-btcusd-minute-data/blob/main/data/updates/btcusd_bitstamp_1min_latest.csv)
 
-## Keeping the Data Up-to-Date
+### Keeping the Data Up-to-Date
 
-Some time passes and you want to fetch the new daily updates. Using git, perform a force pull:
+Some time passes and you want to fetch the new daily updates. Perform a force pull:
 
 ```bash
 git fetch upstream
-git reset --hard upstream/main  # This is needed instead of `git pull`
-# because the daily update file is overwritten each day to maintain a clean git history:
+git reset --hard upstream/main
 ```
+
+This is needed instead of `git pull`, because the daily update file gets overwritten to keep the git history clean.
 
 ## Working with the Data in Python
 
@@ -69,15 +70,16 @@ pip install poetry  # Install Poetry
 poetry install  # Install the project dependencies
 ```
 
-We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity:
+We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity
+(validate that there are no missing minutes, no duplicates, no nulls, etc):
 
 ```bash
 python -m scripts.inspect_data merged
-# python -m scripts.inspect_data bulk
-# python -m scripts.inspect_data updated
 ```
 
-## Python Template for Loading the Data
+Replace `merged` with `bulk` or `updated` to inspect the individual bulk or daily datasets.
+
+### Python Template for Loading the Data
 
 If you need a basic template for just loading the data into a single DataFrame:
 
