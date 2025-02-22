@@ -69,8 +69,10 @@ def main() -> None:
 
     # Define paths to the datasets
     data_paths = {
-        "bulk": os.path.join("data", "historical", "btcusd_bitstamp_1min_2012-2025.csv"),
-        "updated": os.path.join("data", "updates", "btcusd_bitstamp_1min_latest.csv")
+        "bulk": os.path.join(
+            "data", "historical", "btcusd_bitstamp_1min_2012-2025.csv"
+        ),
+        "updated": os.path.join("data", "updates", "btcusd_bitstamp_1min_latest.csv"),
     }
 
     # Load and merge datasets if 'merged' is selected
@@ -83,7 +85,10 @@ def main() -> None:
         # Get the path for the selected dataset
         data_path = data_paths.get(data_type)
         if not data_path:
-            print(f"Invalid data type specified: {data_type}. Choose from 'bulk', 'updated', or 'merged'.")
+            print(
+                f"Invalid data type specified: {data_type}."
+                "Choose from 'bulk', 'updated', or 'merged'."
+            )
             sys.exit(1)
         # Load the selected data
         df = load_data(data_path)
