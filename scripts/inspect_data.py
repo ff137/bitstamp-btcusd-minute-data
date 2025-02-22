@@ -7,7 +7,9 @@ import pandas as pd
 def load_data(data_path: str) -> pd.DataFrame:
     """Load the dataset from the given path."""
     try:
-        df = pd.read_csv(data_path)
+        df = pd.read_csv(
+            data_path, compression="gzip" if data_path.endswith(".gz") else None
+        )
         print(f"Loaded data with {len(df)} records from {data_path}.")
         return df
     except Exception as e:
@@ -70,7 +72,7 @@ def main() -> None:
     # Define paths to the datasets
     data_paths = {
         "bulk": os.path.join(
-            "data", "historical", "btcusd_bitstamp_1min_2012-2025.csv"
+            "data", "historical", "btcusd_bitstamp_1min_2012-2025.csv.gz"
         ),
         "updated": os.path.join("data", "updates", "btcusd_bitstamp_1min_latest.csv"),
     }
