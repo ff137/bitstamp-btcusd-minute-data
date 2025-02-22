@@ -15,8 +15,8 @@ pandas = "^2.2.3"
 requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.9.4"
+ruff = "^0.9.7"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.1"]
 build-backend = "poetry.core.masonry.api"
