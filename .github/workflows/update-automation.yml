@@ -27,7 +27,7 @@ jobs:
       - name: Install Poetry
         shell: bash
         run: |
-          pipx install poetry==2.0.1  --python python3.12
+          pipx install poetry==2.1.1  --python python3.12
           echo $PIPX_BIN_DIR >> $GITHUB_PATH
 
       # Step 4: Install project dependencies using Poetry
