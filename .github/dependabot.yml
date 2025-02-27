@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Maintain dependencies for Python
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "12:00"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
