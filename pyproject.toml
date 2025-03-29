@@ -15,7 +15,7 @@ pandas = "^2.2.3"
 requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.9.7"
+ruff = "^0.11.2"
 
 [build-system]
 requires = ["poetry-core>=2.1"]
