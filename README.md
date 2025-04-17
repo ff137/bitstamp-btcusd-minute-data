@@ -1,5 +1,8 @@
 # Bitstamp BTC/USD 1-minute OHLC Data
 
+[![Last update](https://img.shields.io/github/last-commit/ff137/bitstamp-btcusd-minute-data/main?path=data%2Fupdates%2Fbtcusd_bitstamp_1min_latest.csv&label=Last%20update)](./data/updates/)
+![GitHub repo size](https://img.shields.io/github/repo-size/ff137/bitstamp-btcusd-minute-data)
+
 This repository provides historical and up-to-date Bitcoin (BTC/USD) 1-minute OHLC candle data from Bitstamp.
 
 ## Bulk Historical Data
