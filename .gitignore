@@ -1,6 +1,8 @@
 data/original/*.csv
 data/historical/*.csv
 
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
