@@ -62,7 +62,7 @@ jobs:
           find ./_site -type f -name "*.html" -exec sudo sed -i 's|<h1><a href="https://ff137.github.io/bitstamp-btcusd-minute-data/"|<h1><a href="https://github.com/ff137/bitstamp-btcusd-minute-data/"|g' {} +
 
       - name: Upload Artifact for Deployment
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
 
   # Deployment job
   deploy:
