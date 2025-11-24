@@ -12,7 +12,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: false # No need to fetch the bulk data for this workflow
           fetch-depth: 2 # Fetch enough history to reference HEAD~
