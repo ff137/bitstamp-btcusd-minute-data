@@ -29,7 +29,7 @@ and finally saved in `data/historical/btcusd_bitstamp_1min_2012-2025.csv`
 
 ## After Processing
 
-Inspect the data using `python scripts/inspect_bulk_data.py`.
+Inspect the data using `python scripts/inspect_data.py`.
 
 Zip before uploading to github:
 

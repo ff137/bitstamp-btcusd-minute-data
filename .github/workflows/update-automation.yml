@@ -40,24 +40,32 @@ jobs:
           set -o pipefail
           uv run python scripts/update_data.py 2>&1 | tee script_output.log
           if grep -q "Successfully saved" script_output.log; then
-            echo "SCRIPT_SUCCESS=true" >> $GITHUB_ENV
+            echo "SCRIPT_SUCCESS=true" >> "$GITHUB_ENV"
           else
-            echo "SCRIPT_SUCCESS=false" >> $GITHUB_ENV
+            echo "SCRIPT_SUCCESS=false" >> "$GITHUB_ENV"
           fi
 
-      # Step 5: Check previous commit message
+      # Step 5: Validate generated updates against the historical seam
+      - name: Validate dataset seam
+        if: env.SCRIPT_SUCCESS == 'true'
+        run: |
+          uv run python scripts/validate_dataset.py \
+            --historical-tail tests/fixtures/historical_tail.csv \
+            --updates data/updates/btcusd_bitstamp_1min_latest.csv
+
+      # Step 6: Check previous commit message
       - name: Check previous commit message
         if: env.SCRIPT_SUCCESS == 'true'
         run: |
           LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
           if [[ "$LAST_COMMIT_MSG" == ":package: Daily update"* ]]; then
             echo "Previous commit is a daily update. Preparing to overwrite."
-            echo "RESET_PREVIOUS_COMMIT=true" >> $GITHUB_ENV
+            echo "RESET_PREVIOUS_COMMIT=true" >> "$GITHUB_ENV"
           else
-            echo "RESET_PREVIOUS_COMMIT=false" >> $GITHUB_ENV
+            echo "RESET_PREVIOUS_COMMIT=false" >> "$GITHUB_ENV"
           fi
 
-      # Step 6: Commit and force push if previous commit was a daily update
+      # Step 7: Commit and force push if previous commit was a daily update
       - name: Commit and Push Updates
         if: env.SCRIPT_SUCCESS == 'true'
         run: |
