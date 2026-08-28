@@ -51,33 +51,31 @@ Or, just download the individual datasets:
 
 ### Keeping the Data Up-to-Date
 
-Some time passes and you want to fetch the new daily updates. Perform a force pull:
+Daily updates are ordinary commits. After cloning, fetch new minutes with `git pull`.
+
+Previously (before 2026-08-28), data was kept up-to-date by overwriting the git history.
+If your clone still tracks this older workflow, then run this once, and use `git pull` thereafter:
 
 ```bash
 git fetch upstream
 git reset --hard upstream/main
 ```
 
-This is needed instead of `git pull`, because the daily update file gets overwritten to keep the git history clean.
-
 ## Working with the Data in Python
 
-Assuming you have [Python installed](https://www.python.org/downloads/release/python-3129/),
-you can install Poetry and the project dependencies:
+Assuming you have [Python 3.11+](https://www.python.org/downloads/) and
+[uv](https://docs.astral.sh/uv/), install the project dependencies from
+the repository root:
 
 ```bash
-python -m venv venv  # Create a new virtual environment
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-
-pip install poetry  # Install Poetry
-poetry install  # Install the project dependencies
+uv sync
 ```
 
 We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity
 (validate that there are no missing minutes, no duplicates, no nulls, etc):
 
 ```bash
-python -m scripts.inspect_data merged
+uv run python -m scripts.inspect_data merged
 ```
 
 Replace `merged` with `bulk` or `updated` to inspect the individual bulk or daily datasets.
