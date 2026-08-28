@@ -6,10 +6,11 @@ import argparse
 import csv
 import gzip
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterable, TextIO
+from typing import TextIO
 
 EXPECTED_HEADER = "timestamp,open,high,low,close,volume"
 COLUMN_NAMES = ("timestamp", "open", "high", "low", "close", "volume")
