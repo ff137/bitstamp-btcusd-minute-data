@@ -16,6 +16,7 @@ Repository = "https://github.com/ff137/bitstamp-btcusd-minute-data"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1,<10.0.0",
     "ruff>=0.9.7,<0.10.0",
 ]
 

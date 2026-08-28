@@ -32,3 +32,19 @@ set -euo pipefail
 uv run ruff check .
 uv run ruff format --check .
 """
+
+[tasks.test]
+description = "Run pytest suite"
+depends = ["uv:install"]
+run = "uv run pytest"
+
+[tasks.validate]
+description = "Validate fixture tail seam against real updates CSV"
+depends = ["uv:install"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+uv run python scripts/validate_dataset.py \
+  --historical-tail tests/fixtures/historical_tail.csv \
+  --updates data/updates/btcusd_bitstamp_1min_latest.csv
+"""
