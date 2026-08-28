@@ -5,6 +5,10 @@ on:
     - cron: "0 0 * * *" # Runs daily at 00:00 UTC
   workflow_dispatch: # Allows manual triggering from the GitHub UI
 
+env:
+  # Managed installs so setup-uv cache-python can restore Python 3.14.7.
+  UV_PYTHON_PREFERENCE: only-managed
+
 jobs:
   fetch-and-merge:
     runs-on: ubuntu-latest
@@ -17,36 +21,31 @@ jobs:
           lfs: false # No need to fetch the bulk data for this workflow
           fetch-depth: 2 # Fetch enough history to reference HEAD~
 
-      # Step 2: Set up Python 3.12
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      # Step 2: Set up uv and Python 3.14.7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          python-version: "3.12"
+          enable-cache: true
+          prune-cache: false
+          cache-python: true
+          python-version: "3.14.7"
 
-      # Step 3: Install Poetry
-      - name: Install Poetry
-        shell: bash
-        run: |
-          pipx install poetry==2.1.1  --python python3.12
-          echo $PIPX_BIN_DIR >> $GITHUB_PATH
-
-      # Step 4: Install project dependencies using Poetry
+      # Step 3: Install project dependencies
       - name: Install dependencies
-        run: |
-          poetry install
+        run: uv sync --frozen
 
-      # Step 5: Run the Python script to fetch and process data
+      # Step 4: Run the Python script to fetch and process data
       - name: Run data processing script
         run: |
           set -o pipefail
-          poetry run python scripts/update_data.py 2>&1 | tee script_output.log
+          uv run python scripts/update_data.py 2>&1 | tee script_output.log
           if grep -q "Successfully saved" script_output.log; then
             echo "SCRIPT_SUCCESS=true" >> $GITHUB_ENV
           else
             echo "SCRIPT_SUCCESS=false" >> $GITHUB_ENV
           fi
 
-      # Step 6: Check previous commit message
+      # Step 5: Check previous commit message
       - name: Check previous commit message
         if: env.SCRIPT_SUCCESS == 'true'
         run: |
@@ -58,7 +57,7 @@ jobs:
             echo "RESET_PREVIOUS_COMMIT=false" >> $GITHUB_ENV
           fi
 
-      # Step 7: Commit and force push if previous commit was a daily update
+      # Step 6: Commit and force push if previous commit was a daily update
       - name: Commit and Push Updates
         if: env.SCRIPT_SUCCESS == 'true'
         run: |
