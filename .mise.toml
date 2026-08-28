@@ -1,0 +1,34 @@
+# https://mise.jdx.dev
+[tools]
+python = "3.14.7"
+uv = "0.12.6"
+
+[settings]
+install_before = "7d"  # only install versions released more than 7 days ago
+experimental = true
+jobs = 1
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks."uv:install"]
+description = "Install all dependencies"
+run = "uv sync --all-groups --frozen"
+
+[tasks."uv:lock-check"]
+description = "Verify uv.lock is up to date"
+run = "uv lock --check"
+
+[tasks.lint]
+description = "Run Ruff checks without modifying files"
+run = "uv run ruff check ."
+
+[tasks."lint:check"]
+description = "Run Ruff checks and format check without modifying files"
+depends = ["uv:install"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+uv run ruff check .
+uv run ruff format --check .
+"""
