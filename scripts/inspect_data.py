@@ -12,7 +12,7 @@ def load_data(data_path: str) -> pd.DataFrame:
         )
         print(f"Loaded data with {len(df)} records from {data_path}.")
         return df
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error loading data from {data_path}: {e}")
         sys.exit(1)
 

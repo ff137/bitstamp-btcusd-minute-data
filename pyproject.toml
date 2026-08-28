@@ -7,8 +7,8 @@ license = { file = "LICENSE" }
 authors = [{ name = "Mourits de Beer", email = "ff137@proton.me" }]
 requires-python = ">=3.11"
 dependencies = [
-    "pandas>=2.2.3,<3.0.0",
-    "requests>=2.32.3,<3.0.0",
+    "pandas>=2.3.3,<3.0.0",
+    "requests>=2.34.2,<3.0.0",
 ]
 
 [project.urls]
@@ -17,7 +17,7 @@ Repository = "https://github.com/ff137/bitstamp-btcusd-minute-data"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1,<10.0.0",
-    "ruff>=0.9.7,<0.10.0",
+    "ruff>=0.16.4,<0.17.0",
 ]
 
 [build-system]
@@ -26,6 +26,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["scripts"]
+
+[tool.ruff]
+extend-exclude = ["README.md"]
 
 [tool.uv]
 exclude-newer = "7 days"

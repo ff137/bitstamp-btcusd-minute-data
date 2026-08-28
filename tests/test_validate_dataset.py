@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from scripts.validate_dataset import (
-    MAX_ISSUES,
     COLUMN_NAMES,
+    MAX_ISSUES,
     DatasetSummary,
     validate_csv_rows,
     validate_dataset,

@@ -1,25 +1,24 @@
 import os
 import sys
-from typing import List, Tuple
 
 import pandas as pd
 
 
 def load_original_data(
     bulk_data_path: str, missing_data_path: str
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load the original and missing datasets."""
     try:
         bulk_df = pd.read_csv(bulk_data_path)
         print(f"Loaded bulk data with {len(bulk_df)} records.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error loading bulk data: {e}")
         sys.exit(1)
 
     try:
         missing_df = pd.read_csv(missing_data_path)
         print(f"Loaded missing data with {len(missing_df)} records.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error loading missing data: {e}")
         sys.exit(1)
 
@@ -65,7 +64,7 @@ def merge_datasets(bulk_df: pd.DataFrame, missing_df: pd.DataFrame) -> pd.DataFr
     return merged_df
 
 
-def check_missing_timestamps(df: pd.DataFrame, interval_seconds: int = 60) -> List[int]:
+def check_missing_timestamps(df: pd.DataFrame, interval_seconds: int = 60) -> list[int]:
     """Check for missing timestamps in the merged dataset."""
     df = df.sort_values(by="timestamp").reset_index(drop=True)
 
@@ -127,7 +126,7 @@ def save_merged_data(df: pd.DataFrame, output_path: str) -> None:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         df.to_csv(output_path, index=False)
         print(f"Merged data saved to {output_path}.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error saving merged data: {e}")
         sys.exit(1)
 
