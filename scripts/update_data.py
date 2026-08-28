@@ -1,7 +1,7 @@
 import logging
 import os
-from datetime import datetime, timezone
-from typing import List, Tuple
+import sys
+from datetime import UTC, datetime
 
 import pandas as pd
 import requests
@@ -31,7 +31,7 @@ def fetch_bitstamp_data(
     end_timestamp: int,
     step: int = 60,
     limit: int = 1000,
-) -> List[dict]:
+) -> list[dict]:
     url = f"https://www.bitstamp.net/api/v2/ohlc/{currency_pair}/"
     params = {
         "step": step,  # 60 seconds (1-minute interval)
@@ -57,7 +57,7 @@ def ensure_data() -> None:
                 f"Neither bulk dataset ({BULK_DATA_PATH}) nor daily dataset ({DAILY_DATA_PATH}) found.\n"
                 f"Please ensure data is unzipped and present at {BULK_DATA_PATH} for first run."
             )
-            exit(1)
+            sys.exit(1)
         else:
             logger.info(
                 f"Daily dataset ({DAILY_DATA_PATH}) not found. Assuming this is first run."
@@ -65,13 +65,13 @@ def ensure_data() -> None:
 
 
 # Check for missing data since the last update
-def check_missing_intervals(df: pd.DataFrame) -> Tuple[int, int]:
+def check_missing_intervals(df: pd.DataFrame) -> tuple[int, int]:
     last_timestamp = int(df["timestamp"].max())
     logger.debug(f"Last timestamp: {last_timestamp}")
 
     # Round current timestamp down to the nearest minute
     current_timestamp = int(
-        datetime.now(timezone.utc).replace(second=0, microsecond=0).timestamp()
+        datetime.now(UTC).replace(second=0, microsecond=0).timestamp()
     )
     # We subtract 60 seconds to avoid fetching the current minute, which is subject to change
     current_timestamp -= 60
@@ -88,7 +88,7 @@ def check_missing_intervals(df: pd.DataFrame) -> Tuple[int, int]:
 
 # Fetch and append missing data
 def fetch_and_append_missing_data(
-    currency_pair: str, missing_interval: Tuple[int, int], daily_df: pd.DataFrame
+    currency_pair: str, missing_interval: tuple[int, int], daily_df: pd.DataFrame
 ) -> pd.DataFrame:
     all_new_data = []
     start_timestamp, end_timestamp = missing_interval
