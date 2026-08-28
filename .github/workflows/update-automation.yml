@@ -19,7 +19,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: false # No need to fetch the bulk data for this workflow
-          fetch-depth: 2 # Fetch enough history to reference HEAD~
 
       # Step 2: Set up uv and Python 3.14.7
       - name: Set up uv
@@ -53,31 +52,16 @@ jobs:
             --historical-tail tests/fixtures/historical_tail.csv \
             --updates data/updates/btcusd_bitstamp_1min_latest.csv
 
-      # Step 6: Check previous commit message
-      - name: Check previous commit message
-        if: env.SCRIPT_SUCCESS == 'true'
-        run: |
-          LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
-          if [[ "$LAST_COMMIT_MSG" == ":package: Daily update"* ]]; then
-            echo "Previous commit is a daily update. Preparing to overwrite."
-            echo "RESET_PREVIOUS_COMMIT=true" >> "$GITHUB_ENV"
-          else
-            echo "RESET_PREVIOUS_COMMIT=false" >> "$GITHUB_ENV"
-          fi
-
-      # Step 7: Commit and force push if previous commit was a daily update
+      # Step 6: Commit and push the validated daily update
       - name: Commit and Push Updates
         if: env.SCRIPT_SUCCESS == 'true'
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          if [ "$RESET_PREVIOUS_COMMIT" == "true" ]; then
-            git reset HEAD~ # Drop the previous commit
-          fi
           git add data/updates/btcusd_bitstamp_1min_latest.csv
-          git commit -m ":package: Daily update: $(date -u +'%Y-%m-%d')"
-          if [ "$RESET_PREVIOUS_COMMIT" == "true" ]; then
-            git push -f origin main # Force push to overwrite the previous commit
-          else
-            git push origin main
+          if git diff --cached --quiet; then
+            echo "No dataset changes to publish."
+            exit 0
           fi
+          git commit -m ":package: Daily update: $(date -u +'%Y-%m-%d')"
+          git push origin main
