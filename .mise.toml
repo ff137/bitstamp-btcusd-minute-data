@@ -15,6 +15,13 @@ _.python.venv = { path = ".venv", create = true }
 description = "Install all dependencies"
 run = "uv sync --all-groups --frozen"
 
+[tasks."uv:update"]
+description = "uv Update lock file"
+run = "uv lock --upgrade"
+
+[tasks."uv:upgrade"]
+depends = ["uv:update", "uv:install"]
+
 [tasks."uv:lock-check"]
 description = "Verify uv.lock is up to date"
 run = "uv lock --check"
