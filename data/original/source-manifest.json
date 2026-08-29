@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "canonical_source": "kaggle",
+  "kaggle": {
+    "dataset": "mczielinski/bitcoin-historical-data",
+    "version": 706,
+    "download_url": "https://www.kaggle.com/api/v1/datasets/download/mczielinski/bitcoin-historical-data?datasetVersionNumber=706",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "attribution": "Zielak (mczielinski), Bitcoin Historical Data, Kaggle",
+    "acquired_at": "2026-08-29T12:19:00Z",
+    "kaggle_last_updated": "2026-08-29T04:49:44.907Z",
+    "filename": "btcusd_1-min_data.csv",
+    "sha256": "c3ea6522e69673da38baf88755644d546363e8a96ac60f9e7dafe003c890817f",
+    "header": ["Timestamp", "Open", "High", "Low", "Close", "Volume"],
+    "row_count": 7710039,
+    "first_timestamp": 1325376060,
+    "last_timestamp": 1787978340
+  },
+  "publication": {
+    "path": "data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz",
+    "sha256": "1be152060b39327b669cbed236eeb283191fadaf3862f76c1e974be54ceb1a20",
+    "first_timestamp": 1325376060,
+    "last_timestamp": 1736208000,
+    "row_count": 6847200,
+    "columns": ["timestamp", "open", "high", "low", "close", "volume"]
+  },
+  "legacy_community_gaps": {
+    "status": "audit_only",
+    "filename": "missing_ohlc_data_all_gaps_as_of_1736148000.csv",
+    "source_url": "https://github.com/mczielinski/kaggle-bitcoin/issues/2#issuecomment-2577927918",
+    "sha256": "1b529fbb68633a16c1c1feebbb00ced0656ad2a37fbf7eda0a26391fd7c2a752",
+    "row_count": 106320,
+    "notes": "Exact subset of Kaggle v706; not used when building the published historical file."
+  }
+}

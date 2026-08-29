@@ -1,9 +1,8 @@
 """Tests for scripts/validate_dataset.py."""
 
-from __future__ import annotations
-
 import csv
 import gzip
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -14,10 +13,12 @@ from scripts.validate_dataset import (
     COLUMN_NAMES,
     MAX_ISSUES,
     DatasetSummary,
+    expected_summary_issues,
     validate_csv_rows,
     validate_dataset,
     validate_historical_and_updates,
     validate_seam,
+    validate_sha256,
 )
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -409,6 +410,72 @@ def test_cli_failure_reports_to_stderr(tmp_path: Path) -> None:
     assert completed.returncode != 0
     assert "seam validation failed" in completed.stderr
     assert "seam mismatch" in completed.stderr
+
+
+def test_expected_summary_issues_detect_extent_mismatch() -> None:
+    summary = DatasetSummary("historical", 5, 1736207760, 1736208000)
+    issues = expected_summary_issues(
+        summary,
+        expected_first=1325376060,
+        expected_last=1736208000,
+        expected_rows=6847200,
+    )
+    messages = [issue.message for issue in issues]
+    assert any("expected 6847200 historical rows" in message for message in messages)
+    assert any("expected first timestamp" in message for message in messages)
+
+
+def test_cli_expected_summary_flags() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_dataset.py",
+            "--historical-tail",
+            str(HISTORICAL_TAIL),
+            "--updates",
+            str(UPDATES_HEAD),
+            "--expected-first",
+            "1736207760",
+            "--expected-last",
+            "1736208000",
+            "--expected-rows",
+            "5",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_validate_sha256() -> None:
+    expected = hashlib.sha256(HISTORICAL_TAIL.read_bytes()).hexdigest()
+    assert validate_sha256(HISTORICAL_TAIL, expected) is None
+    issue = validate_sha256(HISTORICAL_TAIL, "0" * 64)
+    assert issue is not None
+    assert "SHA-256 mismatch" in issue.message
+
+
+def test_cli_expected_checksum_failure() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_dataset.py",
+            "--historical-tail",
+            str(HISTORICAL_TAIL),
+            "--updates",
+            str(UPDATES_HEAD),
+            "--expected-sha256",
+            "0" * 64,
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode != 0
+    assert "historical checksum mismatch" in completed.stderr
 
 
 def test_cli_file_validation_failure(tmp_path: Path) -> None:

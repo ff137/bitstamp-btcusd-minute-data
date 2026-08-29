@@ -1,10 +1,9 @@
 """Streaming validator for Bitstamp BTC/USD one-minute OHLC CSV datasets."""
 
-from __future__ import annotations
-
 import argparse
 import csv
 import gzip
+import hashlib
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -16,6 +15,7 @@ EXPECTED_HEADER = "timestamp,open,high,low,close,volume"
 COLUMN_NAMES = ("timestamp", "open", "high", "low", "close", "volume")
 MAX_ISSUES = 20
 MINUTE_SECONDS = 60
+HASH_CHUNK_SIZE = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -306,6 +306,60 @@ def validate_dataset(path: str | Path) -> ValidationResult:
     return result
 
 
+def expected_summary_issues(
+    summary: DatasetSummary,
+    *,
+    expected_first: int | None = None,
+    expected_last: int | None = None,
+    expected_rows: int | None = None,
+) -> tuple[ValidationIssue, ...]:
+    """Check a validated summary against pinned publication extents."""
+    issues: list[ValidationIssue] = []
+    if expected_rows is not None and summary.row_count != expected_rows:
+        _add_issue(
+            issues,
+            row_number=None,
+            message=(
+                f"expected {expected_rows} historical rows, found {summary.row_count}"
+            ),
+        )
+    if expected_first is not None and summary.first_timestamp != expected_first:
+        _add_issue(
+            issues,
+            row_number=None,
+            message=(
+                f"expected first timestamp {expected_first}, "
+                f"found {summary.first_timestamp}"
+            ),
+        )
+    if expected_last is not None and summary.last_timestamp != expected_last:
+        _add_issue(
+            issues,
+            row_number=None,
+            message=(
+                f"expected last timestamp {expected_last}, "
+                f"found {summary.last_timestamp}"
+            ),
+        )
+    return tuple(issues)
+
+
+def validate_sha256(path: str | Path, expected: str) -> ValidationIssue | None:
+    """Return an issue when a file does not match its pinned SHA-256."""
+    digest = hashlib.sha256()
+    try:
+        with Path(path).open("rb") as handle:
+            while chunk := handle.read(HASH_CHUNK_SIZE):
+                digest.update(chunk)
+    except OSError as exc:
+        return ValidationIssue(f"cannot hash file: {exc}")
+
+    actual = digest.hexdigest()
+    if actual != expected:
+        return ValidationIssue(f"SHA-256 mismatch: expected {expected}, found {actual}")
+    return None
+
+
 def validate_seam(
     historical: DatasetSummary,
     updates: DatasetSummary,
@@ -382,11 +436,45 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to the updates CSV.",
     )
+    parser.add_argument(
+        "--expected-first",
+        type=int,
+        default=None,
+        help="Expected first historical timestamp (Unix seconds).",
+    )
+    parser.add_argument(
+        "--expected-last",
+        type=int,
+        default=None,
+        help="Expected last historical timestamp (Unix seconds).",
+    )
+    parser.add_argument(
+        "--expected-rows",
+        type=int,
+        default=None,
+        help="Expected historical row count.",
+    )
+    parser.add_argument(
+        "--expected-sha256",
+        default=None,
+        help="Expected SHA-256 of the historical file.",
+    )
     args = parser.parse_args(argv)
 
     historical_result, updates_result, seam_issues = validate_historical_and_updates(
         args.historical_tail,
         args.updates,
+    )
+    expected_issues = expected_summary_issues(
+        historical_result.summary,
+        expected_first=args.expected_first,
+        expected_last=args.expected_last,
+        expected_rows=args.expected_rows,
+    )
+    checksum_issue = (
+        validate_sha256(args.historical_tail, args.expected_sha256)
+        if args.expected_sha256 is not None
+        else None
     )
 
     exit_code = 0
@@ -410,6 +498,17 @@ def main(argv: list[str] | None = None) -> int:
         print("seam validation failed:", file=sys.stderr)
         for issue in seam_issues:
             print(f"  {format_issue(issue)}", file=sys.stderr)
+
+    if expected_issues:
+        exit_code = 1
+        print("historical summary mismatch:", file=sys.stderr)
+        for issue in expected_issues:
+            print(f"  {format_issue(issue)}", file=sys.stderr)
+
+    if checksum_issue is not None:
+        exit_code = 1
+        print("historical checksum mismatch:", file=sys.stderr)
+        print(f"  {format_issue(checksum_issue)}", file=sys.stderr)
 
     if exit_code == 0:
         print(format_summary(historical_result.summary))
