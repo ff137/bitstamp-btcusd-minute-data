@@ -18,7 +18,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          lfs: false # No need to fetch the bulk data for this workflow
+          lfs: false  # No need to fetch the bulk data for this workflow
 
       # Step 2: Set up uv and Python 3.14.7
       - name: Set up uv
@@ -33,34 +33,29 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      # Step 4: Run the Python script to fetch and process data
       - name: Run data processing script
-        run: |
-          set -o pipefail
-          uv run python scripts/update_data.py 2>&1 | tee script_output.log
-          if grep -q "Successfully saved" script_output.log; then
-            echo "SCRIPT_SUCCESS=true" >> "$GITHUB_ENV"
-          else
-            echo "SCRIPT_SUCCESS=false" >> "$GITHUB_ENV"
-          fi
+        run: uv run python scripts/update_data.py
 
-      # Step 5: Validate generated updates against the historical seam
+      - name: Refresh provenance sidecar
+        run: uv run python scripts/provenance.py
+
       - name: Validate dataset seam
-        if: env.SCRIPT_SUCCESS == 'true'
         run: |
           uv run python scripts/validate_dataset.py \
             --historical-tail tests/fixtures/historical_tail.csv \
             --updates data/updates/btcusd_bitstamp_1min_latest.csv
 
-      # Step 6: Commit and push the validated daily update
+      - name: Validate provenance sidecar
+        run: uv run python scripts/validate_provenance.py
+
       - name: Commit and Push Updates
-        if: env.SCRIPT_SUCCESS == 'true'
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/updates/btcusd_bitstamp_1min_latest.csv
+          git add data/updates/btcusd_bitstamp_1min_latest.csv \
+            data/provenance/btcusd_bitstamp_1min.csv
           if git diff --cached --quiet; then
-            echo "No dataset changes to publish."
+            echo "No dataset or provenance changes to publish."
             exit 0
           fi
           git commit -m ":package: Daily update: $(date -u +'%Y-%m-%d')"

@@ -43,3 +43,6 @@ jobs:
             --expected-last 1736208000 \
             --expected-rows 6847200 \
             --expected-sha256 1be152060b39327b669cbed236eeb283191fadaf3862f76c1e974be54ceb1a20
+
+      - name: Validate provenance sidecar
+        run: uv run python scripts/validate_provenance.py
