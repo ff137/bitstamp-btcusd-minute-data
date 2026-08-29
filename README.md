@@ -48,6 +48,14 @@ A daily GitHub action runs at midnight UTC to fetch the latest data and append i
 
 The daily updates (since the bulk data) are saved in [data/updates/btcusd_bitstamp_1min_latest.csv](data/updates/btcusd_bitstamp_1min_latest.csv).
 
+## Provenance
+
+Zero volume in the candle files can mean no trades, a minute we had to fill in, or an exchange halt — they look the same in OHLC. That is why this repo also ships a sparse sidecar: [data/provenance/btcusd_bitstamp_1min.csv](data/provenance/btcusd_bitstamp_1min.csv).
+
+It records the intervals we can actually classify: minutes our daily updater synthesized because Bitstamp omitted them, official Bitstamp incidents and maintenance that affected trading or the public APIs, and later 12-hour-plus zero-volume runs that do not overlap those official windows. No covering row means we have no annotation, not that the minute was healthy.
+
+Early 2012 is the messy part. Between 2 January and 30 April 2012 there are 38 stretches of 12 hours or more with no trades (about 650 hours in total). After that, those long quiet spells basically stop — the only later 12h+ hole in the bulk file is a 108-hour gap in January 2015. A $5 bitcoin market going silent overnight is not 38 outages, so the 2012 spells are left out of the sidecar.
+
 ## How Can I Use This Data?
 
 The simplest way to use the data is to clone the repository:
