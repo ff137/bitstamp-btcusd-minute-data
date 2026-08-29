@@ -14,7 +14,7 @@ Some facts about the data:
 - **Date Range:** From 1 January 2012 to 7 January 2025.
 - **Number of Records:** 6,847,200
 - **File Size:** Approximately 89MB zipped, 327MB unzipped.
-- **Data Integrity:** Complete 60-second grid, with no duplicate timestamps or null values.
+- **Data Integrity:** No duplicates and no null values.
 
 ### Data Preview
 
@@ -28,25 +28,37 @@ Below is a preview of the first and last two rows of the bulk dataset:
 | 1736207940 | 102280.0 | 102280.0 | 102280.0 | 102280.0 | 0.00755403 |
 | 1736208000 | 102278.0 | 102291.0 | 102263.0 | 102263.0 | 0.52310682 |
 
-> Note: We interpret `timestamp` as the open time of the interval in UTC, so
-> each row corresponds to `[timestamp, timestamp + 60s)`. This is backed by
-> Bitstamp trade and candle comparisons, but is not an official Bitstamp
-> guarantee.
-
-The historical file comes from version 706 of
-[Bitcoin Historical Data](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data)
-by Zielak (mczielinski), licensed under
-[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Earlier copies
-of this repository had incorrect UTC timestamps before 08:01 UTC on
-13 September 2024; those rows have now been corrected. The MIT license in this
-repository applies to the code, while the historical data keeps its source
-license.
+> Note: `timestamp` is the open time of the interval in UTC, so each row corresponds to `[timestamp, timestamp + 60s)`.
 
 ## Daily Updates
 
 A daily GitHub action runs at midnight UTC to fetch the latest data and append it to a separate, daily update file.
 
 The daily updates (since the bulk data) are saved in [data/updates/btcusd_bitstamp_1min_latest.csv](data/updates/btcusd_bitstamp_1min_latest.csv).
+
+## Data Quality and Provenance
+
+We use a data integrity script to guarantee a 1-minute resolution (1 row for every minute), even for missing minutes.
+Missing minutes are filled by generating flat candles with zero volume.
+
+This means that zero volume rows can be ambiguous: there could genuinely have been no trades
+for that minute (low liquidity); maybe the data provider didn't submit a record for it (data quality issue); or the exchange was down (outage or maintenance).
+All of these cases "look the same": a minute candle with zero volume.
+
+That is why we also ship a [data provenance file](data/provenance/btcusd_bitstamp_1min.csv).
+This represents a best-effort attempt at categorising periods of extended zero-volume candles.
+It is purely for the convenience of anyone who wants to filter periods of known downtime,
+or if you just want to see the extent of flat, zero-volume candles in the dataset.
+
+Quick takeaways:
+
+- The dataset goes back to 2012, when liquidity was very low. We don't try classify these quiet periods.
+- 2013 is when liquidity starts being good enough that a 30-minute period of zero-volume candles is fairly rare.
+- After March 2013, there are no 4h+ periods of zero-volume candles that does _not_ correspond with a flagged incident. So the data provenance file is good enough to explain all 4h+ outages.
+- The longest period of downtime is 108 hours starting 5 January 2015, after a Bitstamp hot-wallet
+incident. Apart from that, there were two times that the exchange was not trading for ~1 day.
+
+See [scripts/PROVENANCE.md](scripts/PROVENANCE.md) for more details and notes.
 
 ## How Can I Use This Data?
 
@@ -85,8 +97,8 @@ the repository root:
 uv sync
 ```
 
-We have a [sample script](scripts/inspect_data.py) for checking the timestamp
-range, duplicate timestamps, null values, and summary statistics:
+We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity
+(validate that there are no missing minutes, no duplicates, no nulls, etc):
 
 ```bash
 uv run python -m scripts.inspect_data merged

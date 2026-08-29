@@ -2,9 +2,15 @@ import logging
 import os
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 import requests
+
+from scripts.provenance import DEFAULT_SIDECAR_PATH, record_fill_timestamps
 
 # Configuration
 CURRENCY_PAIR = "btcusd"
@@ -203,7 +209,7 @@ def validate_data_integrity(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # Fill missing minutes using forward fill strategy
-def fill_missing_minutes(df: pd.DataFrame) -> pd.DataFrame:
+def fill_missing_minutes(df: pd.DataFrame) -> tuple[pd.DataFrame, list[int]]:
     df = df.drop_duplicates(subset="timestamp", keep="last").copy()
     df.set_index("timestamp", inplace=True)
 
@@ -219,6 +225,7 @@ def fill_missing_minutes(df: pd.DataFrame) -> pd.DataFrame:
 
     # Reindex the DataFrame to include all timestamps
     df = df.reindex(full_range)
+    filled_timestamps = [int(ts) for ts in df.index[df["close"].isna()]]
 
     # Forward fill the close values
     df["close"] = df["close"].ffill()
@@ -235,7 +242,7 @@ def fill_missing_minutes(df: pd.DataFrame) -> pd.DataFrame:
     df.reset_index(inplace=True)
     df.rename(columns={"index": "timestamp"}, inplace=True)
 
-    return df
+    return df, filled_timestamps
 
 
 # Main execution
@@ -263,7 +270,7 @@ if __name__ == "__main__":
         )
 
         # Fill missing minutes
-        updated_daily_df = fill_missing_minutes(updated_daily_df)
+        updated_daily_df, filled_timestamps = fill_missing_minutes(updated_daily_df)
 
         # Validate data integrity
         updated_daily_df = validate_data_integrity(updated_daily_df)
@@ -274,5 +281,9 @@ if __name__ == "__main__":
         logger.info(
             f"Successfully saved {len(updated_daily_df)} records to {DAILY_DATA_PATH}"
         )
+
+        sidecar_path = Path(DEFAULT_SIDECAR_PATH)
+        if filled_timestamps:
+            record_fill_timestamps(filled_timestamps, sidecar_path)
     else:
         logger.info("No missing data to fetch")
