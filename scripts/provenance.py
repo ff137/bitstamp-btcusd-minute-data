@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, TextIO
 
 MINUTE_SECONDS = 60
-TWELVE_HOURS_SECONDS = 12 * 60 * 60
 HOURS_QUANTIZE = Decimal("0.01")
 PERCENT_QUANTIZE = Decimal("0.01")
 
@@ -48,9 +47,7 @@ EXCLUSION_FLAGS = frozenset(
 )
 
 FILL_REFERENCE = "updater:fill_missing_minutes"
-SUSPECTED_REFERENCE = "zero_volume>=12h"
-# 2012 12h+ zero runs are thin-book quiet spells, not published as outages.
-SUSPECTED_OUTAGE_MIN_START = 1356998400  # 2013-01-01 00:00:00 UTC
+SUSPECTED_REFERENCE = "zero_volume>=60m"
 RELEVANT_COMPONENTS = frozenset({"trading", "rest", "websocket", "web"})
 
 DEFAULT_SIDECAR_PATH = Path("data/provenance/btcusd_bitstamp_1min.csv")
@@ -255,7 +252,7 @@ def annotate_price_jumps(
                 interval.end_timestamp,
                 interval.flag,
                 interval.reference,
-                computed or interval.price_jump,
+                computed,
             )
         )
     return annotated
@@ -268,10 +265,10 @@ def open_ohlcv(path: str | Path) -> TextIO:
     return path.open(mode="r", encoding="utf-8", newline="")
 
 
-def iter_ohlcv_candles(
+def iter_ohlcv_rows(
     paths: Sequence[str | Path],
-) -> Iterable[tuple[int, Decimal, Decimal]]:
-    """Yield `(timestamp, close, volume)` from one or more OHLCV CSV files."""
+) -> Iterable[tuple[int, Decimal, Decimal, Decimal, Decimal, Decimal, tuple[str, ...]]]:
+    """Yield parsed OHLCV fields plus the original six CSV strings."""
     for path in paths:
         with open_ohlcv(path) as handle:
             reader = csv.reader(handle)
@@ -294,76 +291,100 @@ def iter_ohlcv_candles(
                     )
                 try:
                     timestamp = int(row[0])
+                    open_ = Decimal(row[1])
+                    high = Decimal(row[2])
+                    low = Decimal(row[3])
                     close = Decimal(row[4])
                     volume = Decimal(row[5])
                 except (InvalidOperation, ValueError) as exc:
                     raise ValueError(
                         f"{path}:{row_number}: invalid numeric value"
                     ) from exc
-                yield timestamp, close, volume
+                yield timestamp, open_, high, low, close, volume, tuple(row)
+
+
+def iter_ohlcv_candles(
+    paths: Sequence[str | Path],
+) -> Iterable[tuple[int, Decimal, Decimal]]:
+    """Yield `(timestamp, close, volume)` from one or more OHLCV CSV files."""
+    for timestamp, _open, _high, _low, close, volume, _raw in iter_ohlcv_rows(paths):
+        yield timestamp, close, volume
+
+
+def collect_closes(
+    paths: Sequence[str | Path],
+    needed: Iterable[int],
+) -> dict[int, Decimal]:
+    wanted = set(needed)
+    closes: dict[int, Decimal] = {}
+    if not wanted:
+        return closes
+    for timestamp, _open, _high, _low, close, _volume, _raw in iter_ohlcv_rows(paths):
+        if timestamp in wanted:
+            closes[timestamp] = close
+            if len(closes) == len(wanted):
+                break
+    return closes
+
+
+def interval_volume_counts(
+    paths: Sequence[str | Path],
+    start_timestamp: int,
+    end_timestamp: int,
+) -> tuple[int, int, int]:
+    """Return (zero_minutes, nonzero_minutes, missing_minutes) in [start, end)."""
+    expected = (end_timestamp - start_timestamp) // MINUTE_SECONDS
+    zeros = 0
+    nonzeros = 0
+    seen = 0
+    for timestamp, _open, _high, _low, _close, volume, _raw in iter_ohlcv_rows(paths):
+        if timestamp < start_timestamp:
+            continue
+        if timestamp >= end_timestamp:
+            break
+        if timestamp != start_timestamp + seen * MINUTE_SECONDS:
+            break
+        seen += 1
+        if volume == 0:
+            zeros += 1
+        else:
+            nonzeros += 1
+    missing = expected - (zeros + nonzeros)
+    return zeros, nonzeros, missing
 
 
 def detect_suspected_outages(
     paths: Sequence[str | Path],
     exclusions: Sequence[Interval] | None = None,
     *,
-    min_duration_seconds: int = TWELVE_HOURS_SECONDS,
+    min_duration_seconds: int | None = None,
     extra_needed_timestamps: Iterable[int] | None = None,
+    forced_liquid_start: int | None = None,
 ) -> tuple[list[Interval], dict[int, Decimal]]:
-    """Emit suspected_outage intervals for contiguous 12h+ zero-volume runs."""
-    exclusion_windows = [
-        item for item in (exclusions or []) if item.flag in EXCLUSION_FLAGS
-    ]
-    needed = set(extra_needed_timestamps or [])
-    closes: dict[int, Decimal] = {}
-    suspected: list[Interval] = []
-    close_before: Decimal | None = None
-    run_start: int | None = None
-    run_end: int | None = None
+    """Emit unexplained liquid-regime zero-volume runs as suspected_outage."""
+    from scripts import outage_candidates as candidates
 
-    def flush_run(close_after: Decimal | None) -> None:
-        nonlocal run_start, run_end
-        if run_start is None or run_end is None:
-            return
-        if run_end - run_start < min_duration_seconds:
-            run_start = None
-            run_end = None
-            return
-        pieces = subtract_exclusions(run_start, run_end, exclusion_windows)
-        for piece_start, piece_end in pieces:
-            if piece_end - piece_start < min_duration_seconds:
-                continue
-            if piece_start < SUSPECTED_OUTAGE_MIN_START:
-                continue
-            suspected.append(
-                Interval(
-                    piece_start,
-                    piece_end,
-                    FLAG_SUSPECTED_OUTAGE,
-                    SUSPECTED_REFERENCE,
-                    format_price_jump(close_before, close_after),
-                )
-            )
-        run_start = None
-        run_end = None
-
-    for timestamp, close, volume in iter_ohlcv_candles(paths):
-        if timestamp in needed:
-            closes[timestamp] = close
-        if volume == 0:
-            if run_start is None:
-                run_start = timestamp
-                if close_before is not None:
-                    closes[timestamp - MINUTE_SECONDS] = close_before
-            run_end = timestamp + MINUTE_SECONDS
-            continue
-        if run_start is not None:
-            closes[timestamp] = close
-        flush_run(close)
-        close_before = close
-
-    flush_run(None)
-    return merge_adjacent(suspected), closes
+    params = candidates.DEFAULT_PARAMS
+    if min_duration_seconds is not None or forced_liquid_start is not None:
+        params = candidates.DetectorParams(
+            version=candidates.DEFAULT_PARAMS.version,
+            absolute_min_seconds=candidates.DEFAULT_PARAMS.absolute_min_seconds,
+            liquid_p99_ceiling_minutes=candidates.DEFAULT_PARAMS.liquid_p99_ceiling_minutes,
+            liquid_streak_months=candidates.DEFAULT_PARAMS.liquid_streak_months,
+            liquid_publish_seconds=(
+                min_duration_seconds
+                if min_duration_seconds is not None
+                else candidates.DEFAULT_PARAMS.liquid_publish_seconds
+            ),
+            forced_liquid_start=forced_liquid_start,
+        )
+    intervals, closes, _scan = candidates.detect_suspected_outages(
+        paths,
+        exclusions,
+        extra_needed_timestamps=extra_needed_timestamps,
+        params=params,
+    )
+    return intervals, closes
 
 
 def _component_names(payload: dict[str, Any]) -> set[str]:
@@ -571,8 +592,18 @@ def refresh_sidecar(
     ohlcv_paths: Sequence[str | Path] | None = None,
     status_intervals: Sequence[Interval] | None = None,
     fetch_status: bool = True,
+    ledger_path: str | Path | None = None,
+    forced_liquid_start: int | None = None,
 ) -> list[Interval]:
-    """Rebuild suspected rows and merge status/fills into the sidecar."""
+    """Refresh fills and official status; publish only reviewed suspected rows."""
+    del forced_liquid_start  # Discovery is frozen in the research snapshot.
+    from scripts.outage_candidates import (
+        CANDIDATES_FILENAME,
+        DEFAULT_RESEARCH_DIR,
+        published_intervals_from_ledger,
+        read_candidates,
+    )
+
     try:
         existing = read_sidecar(sidecar_path)
     except ValueError:
@@ -593,22 +624,21 @@ def refresh_sidecar(
         fetched = []
 
     status = replace_status_intervals(existing_status, fetched)
-    exclusions = [*fills, *status]
 
-    suspected: list[Interval] = []
-    closes: dict[int, Decimal] = {}
+    resolved_ledger = (
+        Path(ledger_path)
+        if ledger_path is not None
+        else DEFAULT_RESEARCH_DIR / CANDIDATES_FILENAME
+    )
+    ledger = read_candidates(resolved_ledger)
+    suspected = published_intervals_from_ledger(ledger)
+
+    merged = merge_adjacent([*fills, *status, *suspected])
     if ohlcv_paths:
         available = [path for path in ohlcv_paths if Path(path).exists()]
         if available:
-            suspected, closes = detect_suspected_outages(
-                available,
-                exclusions,
-                extra_needed_timestamps=needed_close_timestamps(exclusions),
-            )
-
-    merged = merge_adjacent([*fills, *status, *suspected])
-    if closes:
-        merged = annotate_price_jumps(merged, closes)
+            closes = collect_closes(available, needed_close_timestamps(merged))
+            merged = annotate_price_jumps(merged, closes)
     write_sidecar(sidecar_path, merged)
     return merged
 
@@ -662,6 +692,11 @@ def main(argv: list[str] | None = None) -> int:
         "--maintenances-json",
         help="Optional local scheduled-maintenances.json instead of the live API.",
     )
+    parser.add_argument(
+        "--ledger",
+        default="data/provenance/research/candidates.csv",
+        help="Reviewed candidate ledger; the only source of suspected_outage rows.",
+    )
     args = parser.parse_args(argv)
 
     status_intervals: list[Interval] | None
@@ -699,6 +734,7 @@ def main(argv: list[str] | None = None) -> int:
         ohlcv_paths=ohlcv_paths,
         status_intervals=status_intervals,
         fetch_status=fetch_status,
+        ledger_path=args.ledger,
     )
     counts = summarize_intervals(intervals)
     logger.info(

@@ -10,13 +10,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from scripts.outage_candidates import write_candidates
 from scripts.provenance import (
     FLAG_CONFIRMED_OUTAGE,
     FLAG_SCHEDULED_MAINTENANCE,
     FLAG_SOURCE_GAP_FILLED,
     FLAG_SUSPECTED_OUTAGE,
     HEADER,
-    SUSPECTED_OUTAGE_MIN_START,
     Interval,
     detect_suspected_outages,
     merge_adjacent,
@@ -30,7 +30,8 @@ from scripts.update_data import fill_missing_minutes
 from scripts.validate_provenance import validate_sidecar
 
 OHLCV_HEADER = ["timestamp", "open", "high", "low", "close", "volume"]
-TWELVE_HOURS_MINUTES = 12 * 60
+SIXTY_MINUTES = 60
+LIQUID = 0  # forced_liquid_start: treat the whole fixture as liquid
 REAL_SIDECAR = (
     Path(__file__).resolve().parents[1]
     / "data"
@@ -298,59 +299,57 @@ def test_status_parse_scheduled_maintenance_uses_window() -> None:
     assert intervals[0].end_timestamp == 1788167700
 
 
-def test_twelve_hour_zero_run_is_suspected(tmp_path: Path) -> None:
+def test_sixty_minute_zero_run_is_suspected(tmp_path: Path) -> None:
     start = 1736208060
     path = tmp_path / "ohlcv.csv"
-    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=TWELVE_HOURS_MINUTES))
+    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES))
 
-    intervals, _ = detect_suspected_outages([path])
+    intervals, _ = detect_suspected_outages([path], forced_liquid_start=LIQUID)
 
     assert len(intervals) == 1
     assert intervals[0].flag == FLAG_SUSPECTED_OUTAGE
     assert intervals[0].start_timestamp == start + 60
-    assert intervals[0].end_timestamp == start + 60 + TWELVE_HOURS_MINUTES * 60
-    assert intervals[0].reference == "zero_volume>=12h"
+    assert intervals[0].end_timestamp == start + 60 + SIXTY_MINUTES * 60
+    assert intervals[0].reference == "zero_volume>=60m"
     assert intervals[0].price_jump == "0.00"
-    assert intervals[0].duration_hours() == "12.00"
+    assert intervals[0].duration_hours() == "1.00"
 
 
-def test_shorter_than_twelve_hour_zero_run_is_ignored(tmp_path: Path) -> None:
+def test_shorter_than_sixty_minute_zero_run_is_ignored(tmp_path: Path) -> None:
     start = 1736208060
     path = tmp_path / "ohlcv.csv"
-    write_ohlcv(
-        path, zero_run_with_bounds(start, zero_minutes=TWELVE_HOURS_MINUTES - 1)
-    )
+    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES - 1))
 
-    intervals, _ = detect_suspected_outages([path])
+    intervals, _ = detect_suspected_outages([path], forced_liquid_start=LIQUID)
 
     assert intervals == []
 
 
-def test_four_hour_zero_run_is_ignored(tmp_path: Path) -> None:
+def test_four_hour_zero_run_is_published(tmp_path: Path) -> None:
     start = 1736208060
     path = tmp_path / "ohlcv.csv"
     write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=4 * 60))
 
-    intervals, _ = detect_suspected_outages([path])
+    intervals, _ = detect_suspected_outages([path], forced_liquid_start=LIQUID)
 
-    assert intervals == []
+    assert len(intervals) == 1
+    assert intervals[0].duration_hours() == "4.00"
 
 
-def test_2012_twelve_hour_zero_run_is_not_published(tmp_path: Path) -> None:
-    start = 1325412060  # 2012-01-01 in the historical file
+def test_2012_sixty_minute_zero_run_is_not_published(tmp_path: Path) -> None:
+    start = 1325376060  # 2012-01-01 00:01 UTC, historical first timestamp
     path = tmp_path / "ohlcv.csv"
-    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=TWELVE_HOURS_MINUTES))
+    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES))
 
     intervals, _ = detect_suspected_outages([path])
 
-    assert start < SUSPECTED_OUTAGE_MIN_START
     assert intervals == []
 
 
-def test_suspected_excludes_overlap_with_confirmed_outage(tmp_path: Path) -> None:
+def test_suspected_excludes_overlap_leaving_short_remainder(tmp_path: Path) -> None:
     start = 1736208060
     path = tmp_path / "ohlcv.csv"
-    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=TWELVE_HOURS_MINUTES))
+    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES))
     exclusion = Interval(
         start + 60,
         start + 60 + 30 * 60,
@@ -358,7 +357,9 @@ def test_suspected_excludes_overlap_with_confirmed_outage(tmp_path: Path) -> Non
         "https://stspg.io/overlap",
     )
 
-    intervals, _ = detect_suspected_outages([path], [exclusion])
+    intervals, _ = detect_suspected_outages(
+        [path], [exclusion], forced_liquid_start=LIQUID
+    )
 
     assert intervals == []
 
@@ -366,9 +367,7 @@ def test_suspected_excludes_overlap_with_confirmed_outage(tmp_path: Path) -> Non
 def test_suspected_keeps_non_overlapping_remainder(tmp_path: Path) -> None:
     start = 1736208060
     path = tmp_path / "ohlcv.csv"
-    write_ohlcv(
-        path, zero_run_with_bounds(start, zero_minutes=TWELVE_HOURS_MINUTES + 30)
-    )
+    write_ohlcv(path, zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES + 30))
     exclusion = Interval(
         start + 60,
         start + 60 + 30 * 60,
@@ -376,11 +375,13 @@ def test_suspected_keeps_non_overlapping_remainder(tmp_path: Path) -> None:
         "https://stspg.io/overlap",
     )
 
-    intervals, _ = detect_suspected_outages([path], [exclusion])
+    intervals, _ = detect_suspected_outages(
+        [path], [exclusion], forced_liquid_start=LIQUID
+    )
 
     assert len(intervals) == 1
     assert intervals[0].start_timestamp == start + 60 + 30 * 60
-    assert intervals[0].end_timestamp == start + 60 + (TWELVE_HOURS_MINUTES + 30) * 60
+    assert intervals[0].end_timestamp == start + 60 + (SIXTY_MINUTES + 30) * 60
 
 
 def test_price_jump_is_a_column_not_reference(tmp_path: Path) -> None:
@@ -390,49 +391,55 @@ def test_price_jump_is_a_column_not_reference(tmp_path: Path) -> None:
         path,
         zero_run_with_bounds(
             start,
-            zero_minutes=TWELVE_HOURS_MINUTES,
+            zero_minutes=SIXTY_MINUTES,
             close_after="102",
         ),
     )
 
-    intervals, _ = detect_suspected_outages([path])
+    intervals, _ = detect_suspected_outages([path], forced_liquid_start=LIQUID)
 
-    assert intervals[0].reference == "zero_volume>=12h"
+    assert intervals[0].reference == "zero_volume>=60m"
     assert intervals[0].price_jump == "2.00"
 
 
 def test_refresh_is_idempotent(tmp_path: Path) -> None:
     start = 1736208060
-    rows = zero_run_with_bounds(start, zero_minutes=TWELVE_HOURS_MINUTES)
+    rows = zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES)
     ohlcv = tmp_path / "ohlcv.csv"
     sidecar = tmp_path / "sidecar.csv"
     write_ohlcv(ohlcv, rows)
     status = [
         Interval(
-            start + 60 + TWELVE_HOURS_MINUTES * 60,
-            start + 60 + (TWELVE_HOURS_MINUTES + 1) * 60,
+            start + 60 + SIXTY_MINUTES * 60,
+            start + 60 + (SIXTY_MINUTES + 1) * 60,
             FLAG_CONFIRMED_OUTAGE,
             "https://stspg.io/once",
         )
     ]
 
+    ledger = tmp_path / "candidates.csv"
+    write_candidates(ledger, [])
     first = refresh_sidecar(
         sidecar_path=sidecar,
         ohlcv_paths=[ohlcv],
         status_intervals=status,
         fetch_status=False,
+        ledger_path=ledger,
+        forced_liquid_start=LIQUID,
     )
     second = refresh_sidecar(
         sidecar_path=sidecar,
         ohlcv_paths=[ohlcv],
         status_intervals=status,
         fetch_status=False,
+        ledger_path=ledger,
+        forced_liquid_start=LIQUID,
     )
 
     assert first == second
     suspected = [item for item in first if item.flag == FLAG_SUSPECTED_OUTAGE]
     confirmed = [item for item in first if item.flag == FLAG_CONFIRMED_OUTAGE]
-    assert len(suspected) == 1
+    assert suspected == []
     assert confirmed[0].start_timestamp == status[0].start_timestamp
     assert confirmed[0].end_timestamp == status[0].end_timestamp
     assert confirmed[0].reference == status[0].reference
@@ -492,6 +499,8 @@ def test_cli_refresh_from_local_status(tmp_path: Path) -> None:
     incidents = tmp_path / "incidents.json"
     maintenances = tmp_path / "maintenances.json"
     write_ohlcv(ohlcv, contiguous_ohlcv(1736208060, minutes=3, close="100", volume="1"))
+    ledger = tmp_path / "candidates.csv"
+    write_candidates(ledger, [])
     incidents.write_text(
         json.dumps(
             {
@@ -526,6 +535,8 @@ def test_cli_refresh_from_local_status(tmp_path: Path) -> None:
             str(incidents),
             "--maintenances-json",
             str(maintenances),
+            "--ledger",
+            str(ledger),
         ],
         cwd=Path(__file__).resolve().parents[1],
         check=False,
@@ -544,3 +555,164 @@ def test_committed_sidecar_validates() -> None:
     result = validate_sidecar(REAL_SIDECAR)
     assert result.valid
     assert result.summary.row_count >= 0
+
+
+def test_refresh_publishes_only_reviewed_ledger_rows(tmp_path: Path) -> None:
+    from scripts.outage_candidates import (
+        HEURISTIC_REFERENCE,
+        STATUS_CORROBORATED,
+        STATUS_REVIEWED_UNCONFIRMED,
+        Candidate,
+        write_candidates,
+    )
+
+    start = 1736208060
+    first = zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES)
+    second_start = start + (SIXTY_MINUTES + 5) * 60
+    second = zero_run_with_bounds(second_start, zero_minutes=SIXTY_MINUTES)
+    ohlcv_rows = first[:-1] + second
+    ohlcv = tmp_path / "ohlcv.csv"
+    sidecar = tmp_path / "sidecar.csv"
+    ledger = tmp_path / "candidates.csv"
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    (notes / "reviewed.md").write_text("url evidence", encoding="utf-8")
+    write_ohlcv(ohlcv, ohlcv_rows)
+    zero_start = start + 60
+    zero_end = start + 60 + SIXTY_MINUTES * 60
+    write_candidates(
+        ledger,
+        [
+            Candidate(
+                candidate_id="zv-test",
+                start_timestamp=zero_start,
+                end_timestamp=zero_end,
+                duration_minutes=60,
+                regime="liquid",
+                detector_version="regime-v1",
+                rarity_rank=1,
+                status=STATUS_CORROBORATED,
+                decision_date="2026-08-29",
+                reviewer="test",
+                reference="https://blog.bitstamp.net/post/example/",
+                notes_path="notes/reviewed.md",
+            )
+        ],
+    )
+
+    intervals = refresh_sidecar(
+        sidecar_path=sidecar,
+        ohlcv_paths=[ohlcv],
+        status_intervals=[],
+        fetch_status=False,
+        ledger_path=ledger,
+    )
+    suspected = [item for item in intervals if item.flag == FLAG_SUSPECTED_OUTAGE]
+    assert len(suspected) == 1
+    assert suspected[0].start_timestamp == zero_start
+    assert suspected[0].reference == "https://blog.bitstamp.net/post/example/"
+
+    (notes / "heuristic.md").write_text("reviewed silence", encoding="utf-8")
+    other_start = second_start + 60
+    other_end = other_start + SIXTY_MINUTES * 60
+    write_candidates(
+        ledger,
+        [
+            Candidate(
+                candidate_id="zv-test",
+                start_timestamp=zero_start,
+                end_timestamp=zero_end,
+                duration_minutes=60,
+                regime="liquid",
+                detector_version="regime-v1",
+                rarity_rank=1,
+                status=STATUS_CORROBORATED,
+                decision_date="2026-08-29",
+                reviewer="test",
+                reference="https://blog.bitstamp.net/post/example/",
+                notes_path="notes/reviewed.md",
+            ),
+            Candidate(
+                candidate_id="zv-other",
+                start_timestamp=other_start,
+                end_timestamp=other_end,
+                duration_minutes=60,
+                regime="liquid",
+                detector_version="regime-v1",
+                rarity_rank=2,
+                status=STATUS_REVIEWED_UNCONFIRMED,
+                decision_date="2026-08-29",
+                reviewer="test",
+                reference=HEURISTIC_REFERENCE,
+                notes_path="notes/heuristic.md",
+            ),
+        ],
+    )
+    again = refresh_sidecar(
+        sidecar_path=sidecar,
+        ohlcv_paths=[ohlcv],
+        status_intervals=[],
+        fetch_status=False,
+        ledger_path=ledger,
+    )
+    suspected_again = [item for item in again if item.flag == FLAG_SUSPECTED_OUTAGE]
+    assert [item.start_timestamp for item in suspected_again] == [
+        zero_start,
+        other_start,
+    ]
+    assert suspected_again[0].reference.startswith("https://")
+    assert suspected_again[1].reference == HEURISTIC_REFERENCE
+
+
+def test_refresh_does_not_publish_unreviewed_duration_runs(tmp_path: Path) -> None:
+    from scripts.outage_candidates import (
+        HEURISTIC_REFERENCE,
+        STATUS_REVIEWED_UNCONFIRMED,
+        Candidate,
+        write_candidates,
+    )
+
+    start = 1736208060
+    reviewed = zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES)
+    extra_start = start + (SIXTY_MINUTES + 5) * 60
+    extra = zero_run_with_bounds(extra_start, zero_minutes=SIXTY_MINUTES)
+    ohlcv = tmp_path / "ohlcv.csv"
+    sidecar = tmp_path / "sidecar.csv"
+    ledger = tmp_path / "candidates.csv"
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    (notes / "reviewed.md").write_text("reviewed silence", encoding="utf-8")
+    write_ohlcv(ohlcv, reviewed[:-1] + extra)
+    zero_start = start + 60
+    zero_end = start + 60 + SIXTY_MINUTES * 60
+    write_candidates(
+        ledger,
+        [
+            Candidate(
+                candidate_id="zv-reviewed",
+                start_timestamp=zero_start,
+                end_timestamp=zero_end,
+                duration_minutes=60,
+                regime="liquid",
+                detector_version="regime-v1",
+                rarity_rank=1,
+                status=STATUS_REVIEWED_UNCONFIRMED,
+                decision_date="2026-08-29",
+                reviewer="test",
+                reference=HEURISTIC_REFERENCE,
+                notes_path="notes/reviewed.md",
+            )
+        ],
+    )
+
+    intervals = refresh_sidecar(
+        sidecar_path=sidecar,
+        ohlcv_paths=[ohlcv],
+        status_intervals=[],
+        fetch_status=False,
+        ledger_path=ledger,
+    )
+    suspected = [item for item in intervals if item.flag == FLAG_SUSPECTED_OUTAGE]
+    assert len(suspected) == 1
+    assert suspected[0].start_timestamp == zero_start
+    assert extra_start + 60 not in {item.start_timestamp for item in suspected}

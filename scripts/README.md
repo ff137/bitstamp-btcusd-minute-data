@@ -90,9 +90,12 @@ a separate file at `data/updates/btcusd_bitstamp_1min_latest.csv`.
 If Bitstamp leaves out a minute, the current update script keeps the grid
 complete with a flat candle at the previous close and zero volume.
 
-Going-forward gap fills, Statuspage incidents, and 12h+ zero-volume suspected
-outages are recorded in `data/provenance/btcusd_bitstamp_1min.csv`. See
-[PROVENANCE.md](PROVENANCE.md).
+Going-forward gap fills and official Statuspage windows are recorded in
+`data/provenance/btcusd_bitstamp_1min.csv`. Hour-long unexplained zero-volume
+runs in the liquid-regime review window are candidates only; they are
+published as `suspected_outage` after corroboration or explicit review, not
+by duration alone. See [PROVENANCE.md](PROVENANCE.md) and
+[PROVENANCE_RESEARCH.md](PROVENANCE_RESEARCH.md).
 
 ## Want to Know More?
 

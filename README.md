@@ -48,13 +48,33 @@ A daily GitHub action runs at midnight UTC to fetch the latest data and append i
 
 The daily updates (since the bulk data) are saved in [data/updates/btcusd_bitstamp_1min_latest.csv](data/updates/btcusd_bitstamp_1min_latest.csv).
 
-## Provenance
+## Data Quality and Provenance
 
-Zero volume in the candle files can mean no trades, a minute we had to fill in, or an exchange halt — they look the same in OHLC. That is why this repo also ships a sparse sidecar: [data/provenance/btcusd_bitstamp_1min.csv](data/provenance/btcusd_bitstamp_1min.csv).
+We use a data integrity script to guarantee a 1-minute resolution (1 row for every minute), even for missing minutes.
+Missing minutes are filled by generating flat candles with zero volume.
 
-It records the intervals we can actually classify: minutes our daily updater synthesized because Bitstamp omitted them, official Bitstamp incidents and maintenance that affected trading or the public APIs, and later 12-hour-plus zero-volume runs that do not overlap those official windows. No covering row means we have no annotation, not that the minute was healthy.
+This means that zero volume rows can be ambiguous: there could genuinely have been no trades
+for that minute (low liquidity); maybe the data provider didn't submit a record for it (data quality issue); or the exchange was down (outage or maintenance).
+All of these cases "look the same": a minute candle with zero volume.
 
-Early 2012 is the messy part. Between 2 January and 30 April 2012 there are 38 stretches of 12 hours or more with no trades (about 650 hours in total). After that, those long quiet spells basically stop — the only later 12h+ hole in the bulk file is a 108-hour gap in January 2015. A $5 bitcoin market going silent overnight is not 38 outages, so the 2012 spells are left out of the sidecar.
+That is why we also ship a [data provenance file](data/provenance/btcusd_bitstamp_1min.csv).
+Official Bitstamp Statuspage incidents and maintenance (from 2023) are recorded as confirmed
+outages or scheduled maintenance. Hour-long unexplained zero-volume runs from March 2013
+onwards are reviewed; they appear as `suspected_outage` only after that review or after
+corroborating sources. Duration alone does not publish a row. Reviewed rows without a
+source are possible data-quality issues or downtime -- not proved outages. Where we found
+corroborating sources, the `reference` column points at them; otherwise it is a heuristic
+token.
+
+> FYI: The data goes back to 2012, and the first months have very low liquidity. Extended
+> zero-volume runs in that period are not labeled. March 2013 is the start of the review
+> window, not a claim the book was already liquid. The longest published interval is the
+> 108-hour halt starting 09:13 UTC on 5 January 2015, after the Bitstamp hot-wallet
+> incident. Daily updates may refresh fills and official Statuspage windows; they do not
+> invent new suspected rows.
+
+The provenance file is purely for the convenience of anyone who wants to filter periods of known downtime. It is not an exhaustive list of all outages.
+See [scripts/PROVENANCE.md](scripts/PROVENANCE.md) for the schema and operator notes.
 
 ## How Can I Use This Data?
 

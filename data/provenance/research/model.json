@@ -1,0 +1,38 @@
+{
+  "detector_version": "regime-v1",
+  "absolute_min_seconds": 1800,
+  "liquid_p99_ceiling_minutes": 30,
+  "liquid_streak_months": 6,
+  "liquid_publish_seconds": 3600,
+  "liquid_start_timestamp": 1362096000,
+  "liquid_start_iso": "2013-03-01T00:00:00+00:00",
+  "as_of_timestamp": 1787977140,
+  "as_of_iso": "2026-08-29T04:19:00+00:00",
+  "prefix_hash_sha256": "0e22cea9220d27a34a19cd8d4228fdb9a815cc4ecc9c24f35d261337706fd300",
+  "ohlcv_paths": [
+    "data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz",
+    "data/updates/btcusd_bitstamp_1min_latest.csv"
+  ],
+  "row_count": 7710019,
+  "first_timestamp": 1325376060,
+  "last_timestamp": 1787977140,
+  "zero_runs_ge_30m": 4488,
+  "sensitivity_counts": {
+    "thin": {
+      "30": 4325,
+      "60": 2025,
+      "120": 819,
+      "240": 306,
+      "720": 38
+    },
+    "liquid": {
+      "30": 156,
+      "60": 36,
+      "120": 9,
+      "240": 3,
+      "720": 1
+    }
+  },
+  "heuristic_reference": "zero_volume>=60m",
+  "publication_rule": "Duration selects review candidates. Public suspected_outage rows require corroboration or explicit human review."
+}

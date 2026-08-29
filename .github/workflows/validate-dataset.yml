@@ -46,3 +46,6 @@ jobs:
 
       - name: Validate provenance sidecar
         run: uv run python scripts/validate_provenance.py
+
+      - name: Validate provenance ledger
+        run: uv run python scripts/validate_ledger.py
