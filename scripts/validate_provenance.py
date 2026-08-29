@@ -14,7 +14,6 @@ if __package__ in {None, ""}:
 from scripts.provenance import ALLOWED_FLAGS, EXPECTED_HEADER, HEADER, MINUTE_SECONDS
 
 MAX_ISSUES = 20
-HOURS_QUANTIZE = Decimal("0.01")
 
 
 @dataclass(frozen=True)
@@ -65,9 +64,8 @@ def _parse_decimal(raw: str, *, field: str) -> Decimal:
     return number
 
 
-def _expected_duration_hours(start_timestamp: int, end_timestamp: int) -> str:
-    hours = Decimal(end_timestamp - start_timestamp) / Decimal(3600)
-    return format(hours.quantize(HOURS_QUANTIZE))
+def _expected_duration_minutes(start_timestamp: int, end_timestamp: int) -> str:
+    return str((end_timestamp - start_timestamp) // MINUTE_SECONDS)
 
 
 def _parse_timestamp(raw: str) -> int:
@@ -127,13 +125,13 @@ def validate_sidecar_rows(
                 ),
             )
 
-        expected_duration = _expected_duration_hours(start_timestamp, end_timestamp)
+        expected_duration = _expected_duration_minutes(start_timestamp, end_timestamp)
         if duration_raw != expected_duration:
             _add_issue(
                 issues,
                 row_number=row_number,
                 message=(
-                    f"duration_hours {duration_raw!r} does not match "
+                    f"duration_minutes {duration_raw!r} does not match "
                     f"{expected_duration!r}"
                 ),
             )

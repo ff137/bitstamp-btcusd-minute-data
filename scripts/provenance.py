@@ -12,13 +12,12 @@ from pathlib import Path
 from typing import Any, TextIO
 
 MINUTE_SECONDS = 60
-HOURS_QUANTIZE = Decimal("0.01")
 PERCENT_QUANTIZE = Decimal("0.01")
 
 HEADER = (
     "start_timestamp",
     "end_timestamp",
-    "duration_hours",
+    "duration_minutes",
     "flag",
     "price_jump",
     "reference",
@@ -66,15 +65,14 @@ class Interval:
     reference: str
     price_jump: str = ""
 
-    def duration_hours(self) -> str:
-        hours = Decimal(self.end_timestamp - self.start_timestamp) / Decimal(3600)
-        return format(hours.quantize(HOURS_QUANTIZE))
+    def duration_minutes(self) -> str:
+        return str((self.end_timestamp - self.start_timestamp) // MINUTE_SECONDS)
 
     def as_row(self) -> list[str]:
         return [
             str(self.start_timestamp),
             str(self.end_timestamp),
-            self.duration_hours(),
+            self.duration_minutes(),
             self.flag,
             self.price_jump,
             self.reference,

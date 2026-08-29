@@ -94,8 +94,7 @@ Going-forward gap fills and official Statuspage windows are recorded in
 `data/provenance/btcusd_bitstamp_1min.csv`. Hour-long unexplained zero-volume
 runs in the liquid-regime review window are candidates only; they are
 published as `suspected_outage` after corroboration or explicit review, not
-by duration alone. See [PROVENANCE.md](PROVENANCE.md) and
-[PROVENANCE_RESEARCH.md](PROVENANCE_RESEARCH.md).
+by duration alone. See [PROVENANCE.md](PROVENANCE.md).
 
 ## Want to Know More?
 

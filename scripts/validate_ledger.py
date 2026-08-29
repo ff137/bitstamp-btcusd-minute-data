@@ -17,6 +17,7 @@ from scripts.outage_candidates import (
     DETECTOR_VERSION,
     MODEL_FILENAME,
     PUBLISHED_STATUSES,
+    REVIEW_FLOOR_STATUSES,
     STATUS_CORROBORATED,
     STATUS_PENDING_REVIEW,
     STATUS_REVIEWED_UNCONFIRMED,
@@ -152,6 +153,15 @@ def validate_ledger(
                 row_number=index,
                 message=f"unsupported status {item.status!r}",
             )
+        if item.status not in REVIEW_FLOOR_STATUSES:
+            _add_issue(
+                issues,
+                row_number=index,
+                message=(
+                    f"committed ledger must be liquid ≥60m review-floor rows, "
+                    f"found {item.status!r}"
+                ),
+            )
         if item.status == STATUS_CORROBORATED:
             if not is_url_reference(item.reference):
                 _add_issue(
@@ -265,26 +275,27 @@ def validate_ledger(
             item for item in sidecar_intervals if item.flag in EXCLUSION_FLAGS
         ]
         scan = scan_ohlcv(available, params=params)
-        regenerated = {
-            (item.start_timestamp, item.end_timestamp): item
+        regenerated_floor = {
+            (item.start_timestamp, item.end_timestamp)
             for item in build_candidates(scan, exclusions)
+            if item.status in REVIEW_FLOOR_STATUSES
         }
         ledger_bounds = {
             (item.start_timestamp, item.end_timestamp) for item in candidates
         }
-        extra = sorted(ledger_bounds - set(regenerated))
-        missing = sorted(set(regenerated) - ledger_bounds)
+        extra = sorted(ledger_bounds - regenerated_floor)
+        missing = sorted(regenerated_floor - ledger_bounds)
         for start, end in extra[:5]:
             _add_issue(
                 issues,
                 row_number=None,
-                message=f"ledger interval is not in the frozen prefix scan: {start},{end}",
+                message=f"ledger interval is not a liquid ≥60m prefix run: {start},{end}",
             )
         for start, end in missing[:5]:
             _add_issue(
                 issues,
                 row_number=None,
-                message=f"detected prefix run missing from ledger: {start},{end}",
+                message=f"liquid ≥60m prefix run missing from ledger: {start},{end}",
             )
         if scan.liquid_start != model.get("liquid_start_timestamp"):
             _add_issue(

@@ -124,7 +124,7 @@ def test_published_intervals_require_review() -> None:
         status=STATUS_REVIEWED_UNCONFIRMED,
         decision_date="2026-08-29",
         reviewer="test",
-        notes_path="notes/example.md",
+        notes_path="NOTES.md",
     )
     published = published_intervals_from_ledger([reviewed])
     assert len(published) == 1
@@ -143,7 +143,7 @@ def test_apply_decisions_maps_utc_date(tmp_path: Path) -> None:
                 "match": {"utc_date": "2014-02-02"},
                 "status": STATUS_CORROBORATED,
                 "reference": "https://blog.bitstamp.net/post/scheduled-downtime/",
-                "notes_path": "notes/zv-1391331660-1391339520.md",
+                "notes_path": "NOTES.md",
             }
         ],
     }
@@ -216,9 +216,7 @@ def test_scan_as_of_freezes_trailing_candles(tmp_path: Path) -> None:
 def test_ledger_validator_requires_sidecar_row(tmp_path: Path) -> None:
     ledger = tmp_path / "candidates.csv"
     sidecar = tmp_path / "sidecar.csv"
-    notes = tmp_path / "notes"
-    notes.mkdir()
-    (notes / "a.md").write_text("evidence", encoding="utf-8")
+    (tmp_path / "NOTES.md").write_text("evidence", encoding="utf-8")
     write_candidates(
         ledger,
         [
@@ -227,7 +225,7 @@ def test_ledger_validator_requires_sidecar_row(tmp_path: Path) -> None:
                 decision_date="2026-08-29",
                 reviewer="test",
                 reference="https://blog.bitstamp.net/post/a/",
-                notes_path="notes/a.md",
+                notes_path="NOTES.md",
             )
         ],
     )
@@ -271,9 +269,7 @@ def test_ledger_validator_rejects_unreviewed_sidecar_row(tmp_path: Path) -> None
 def test_ledger_validator_accepts_reviewed_unconfirmed(tmp_path: Path) -> None:
     ledger = tmp_path / "candidates.csv"
     sidecar = tmp_path / "sidecar.csv"
-    notes = tmp_path / "notes"
-    notes.mkdir()
-    (notes / "a.md").write_text("reviewed", encoding="utf-8")
+    (tmp_path / "NOTES.md").write_text("reviewed", encoding="utf-8")
     write_candidates(
         ledger,
         [
@@ -281,7 +277,7 @@ def test_ledger_validator_accepts_reviewed_unconfirmed(tmp_path: Path) -> None:
                 status=STATUS_REVIEWED_UNCONFIRMED,
                 decision_date="2026-08-29",
                 reviewer="test",
-                notes_path="notes/a.md",
+                notes_path="NOTES.md",
             )
         ],
     )
@@ -310,9 +306,7 @@ def test_ledger_validator_detects_stale_nonzero_bounds(tmp_path: Path) -> None:
     ohlcv = tmp_path / "ohlcv.csv"
     ledger = tmp_path / "candidates.csv"
     sidecar = tmp_path / "sidecar.csv"
-    notes = tmp_path / "notes"
-    notes.mkdir()
-    (notes / "a.md").write_text("stale", encoding="utf-8")
+    (tmp_path / "NOTES.md").write_text("stale", encoding="utf-8")
     start = 1736208060
     write_ohlcv(ohlcv, zero_run_with_bounds(start, zero_minutes=SIXTY_MINUTES))
     stale_start = start + 60 + 4 * 3600
@@ -327,7 +321,7 @@ def test_ledger_validator_detects_stale_nonzero_bounds(tmp_path: Path) -> None:
                 status=STATUS_REVIEWED_UNCONFIRMED,
                 decision_date="2026-08-29",
                 reviewer="test",
-                notes_path="notes/a.md",
+                notes_path="NOTES.md",
             )
         ],
     )

@@ -4,7 +4,6 @@ import csv
 import json
 import subprocess
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
@@ -77,7 +76,7 @@ def sidecar_row(
     reference: str,
     price_jump: str = "",
 ) -> list[str]:
-    duration = format((Decimal(end - start) / Decimal(3600)).quantize(Decimal("0.01")))
+    duration = str((end - start) // 60)
     return [str(start), str(end), duration, flag, price_jump, reference]
 
 
@@ -312,7 +311,7 @@ def test_sixty_minute_zero_run_is_suspected(tmp_path: Path) -> None:
     assert intervals[0].end_timestamp == start + 60 + SIXTY_MINUTES * 60
     assert intervals[0].reference == "zero_volume>=60m"
     assert intervals[0].price_jump == "0.00"
-    assert intervals[0].duration_hours() == "1.00"
+    assert intervals[0].duration_minutes() == "60"
 
 
 def test_shorter_than_sixty_minute_zero_run_is_ignored(tmp_path: Path) -> None:
@@ -333,7 +332,7 @@ def test_four_hour_zero_run_is_published(tmp_path: Path) -> None:
     intervals, _ = detect_suspected_outages([path], forced_liquid_start=LIQUID)
 
     assert len(intervals) == 1
-    assert intervals[0].duration_hours() == "4.00"
+    assert intervals[0].duration_minutes() == "240"
 
 
 def test_2012_sixty_minute_zero_run_is_not_published(tmp_path: Path) -> None:
@@ -574,9 +573,6 @@ def test_refresh_publishes_only_reviewed_ledger_rows(tmp_path: Path) -> None:
     ohlcv = tmp_path / "ohlcv.csv"
     sidecar = tmp_path / "sidecar.csv"
     ledger = tmp_path / "candidates.csv"
-    notes = tmp_path / "notes"
-    notes.mkdir()
-    (notes / "reviewed.md").write_text("url evidence", encoding="utf-8")
     write_ohlcv(ohlcv, ohlcv_rows)
     zero_start = start + 60
     zero_end = start + 60 + SIXTY_MINUTES * 60
@@ -595,7 +591,7 @@ def test_refresh_publishes_only_reviewed_ledger_rows(tmp_path: Path) -> None:
                 decision_date="2026-08-29",
                 reviewer="test",
                 reference="https://blog.bitstamp.net/post/example/",
-                notes_path="notes/reviewed.md",
+                notes_path="NOTES.md",
             )
         ],
     )
@@ -612,7 +608,6 @@ def test_refresh_publishes_only_reviewed_ledger_rows(tmp_path: Path) -> None:
     assert suspected[0].start_timestamp == zero_start
     assert suspected[0].reference == "https://blog.bitstamp.net/post/example/"
 
-    (notes / "heuristic.md").write_text("reviewed silence", encoding="utf-8")
     other_start = second_start + 60
     other_end = other_start + SIXTY_MINUTES * 60
     write_candidates(
@@ -630,7 +625,7 @@ def test_refresh_publishes_only_reviewed_ledger_rows(tmp_path: Path) -> None:
                 decision_date="2026-08-29",
                 reviewer="test",
                 reference="https://blog.bitstamp.net/post/example/",
-                notes_path="notes/reviewed.md",
+                notes_path="NOTES.md",
             ),
             Candidate(
                 candidate_id="zv-other",
@@ -644,7 +639,7 @@ def test_refresh_publishes_only_reviewed_ledger_rows(tmp_path: Path) -> None:
                 decision_date="2026-08-29",
                 reviewer="test",
                 reference=HEURISTIC_REFERENCE,
-                notes_path="notes/heuristic.md",
+                notes_path="NOTES.md",
             ),
         ],
     )
@@ -679,9 +674,6 @@ def test_refresh_does_not_publish_unreviewed_duration_runs(tmp_path: Path) -> No
     ohlcv = tmp_path / "ohlcv.csv"
     sidecar = tmp_path / "sidecar.csv"
     ledger = tmp_path / "candidates.csv"
-    notes = tmp_path / "notes"
-    notes.mkdir()
-    (notes / "reviewed.md").write_text("reviewed silence", encoding="utf-8")
     write_ohlcv(ohlcv, reviewed[:-1] + extra)
     zero_start = start + 60
     zero_end = start + 60 + SIXTY_MINUTES * 60
@@ -700,7 +692,7 @@ def test_refresh_does_not_publish_unreviewed_duration_runs(tmp_path: Path) -> No
                 decision_date="2026-08-29",
                 reviewer="test",
                 reference=HEURISTIC_REFERENCE,
-                notes_path="notes/reviewed.md",
+                notes_path="NOTES.md",
             )
         ],
     )

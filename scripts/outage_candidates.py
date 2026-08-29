@@ -37,6 +37,7 @@ DEFAULT_RESEARCH_DIR = Path("data/provenance/research")
 MODEL_FILENAME = "model.json"
 CANDIDATES_FILENAME = "candidates.csv"
 DECISIONS_FILENAME = "decisions.json"
+NOTES_FILENAME = "NOTES.md"
 logger = logging.getLogger(__name__)
 
 CANDIDATE_HEADER = (
@@ -645,6 +646,11 @@ def read_candidates(path: str | Path) -> list[Candidate]:
     return rows
 
 
+def review_floor_candidates(candidates: Sequence[Candidate]) -> list[Candidate]:
+    """Liquid-regime ≥60m rows committed to the research ledger."""
+    return [item for item in candidates if item.status in REVIEW_FLOOR_STATUSES]
+
+
 def write_candidates(path: str | Path, candidates: Sequence[Candidate]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -780,7 +786,13 @@ def main(argv: list[str] | None = None) -> int:
         if not decisions_path.is_file():
             raise SystemExit(f"missing decisions file: {decisions_path}")
         candidates = apply_decisions(candidates, load_decisions(decisions_path))
-    write_candidates(research_dir / CANDIDATES_FILENAME, candidates)
+    committed = [
+        _with_status(item, notes_path=NOTES_FILENAME)
+        if item.status in PUBLISHED_STATUSES
+        else item
+        for item in review_floor_candidates(candidates)
+    ]
+    write_candidates(research_dir / CANDIDATES_FILENAME, committed)
     write_model(
         research_dir / MODEL_FILENAME,
         scan=scan,
@@ -789,18 +801,16 @@ def main(argv: list[str] | None = None) -> int:
         sensitivity=sensitivity_counts(scan, exclusions),
     )
     logger.info(
-        "as_of=%s liquid_start=%s prefix=%s candidates=%s pending=%s "
-        "reviewed_unconfirmed=%s corroborated=%s thin=%s below_floor=%s excluded=%s",
+        "as_of=%s liquid_start=%s prefix=%s committed=%s pending=%s "
+        "reviewed_unconfirmed=%s corroborated=%s excluded=%s",
         scan.as_of_timestamp,
         scan.liquid_start,
         scan.prefix_hash_sha256,
-        len(candidates),
-        sum(1 for item in candidates if item.status == STATUS_PENDING_REVIEW),
-        sum(1 for item in candidates if item.status == STATUS_REVIEWED_UNCONFIRMED),
-        sum(1 for item in candidates if item.status == STATUS_CORROBORATED),
-        sum(1 for item in candidates if item.status == STATUS_THIN_UNPUBLISHED),
-        sum(1 for item in candidates if item.status == STATUS_BELOW_FLOOR),
-        sum(1 for item in candidates if item.status == STATUS_EXCLUDED),
+        len(committed),
+        sum(1 for item in committed if item.status == STATUS_PENDING_REVIEW),
+        sum(1 for item in committed if item.status == STATUS_REVIEWED_UNCONFIRMED),
+        sum(1 for item in committed if item.status == STATUS_CORROBORATED),
+        sum(1 for item in committed if item.status == STATUS_EXCLUDED),
     )
     return 0
 
