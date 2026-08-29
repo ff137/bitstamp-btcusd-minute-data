@@ -36,7 +36,6 @@ LIQUID_PUBLISH_SECONDS = 60 * 60
 DEFAULT_RESEARCH_DIR = Path("data/provenance/research")
 MODEL_FILENAME = "model.json"
 CANDIDATES_FILENAME = "candidates.csv"
-DECISIONS_FILENAME = "decisions.json"
 NOTES_FILENAME = "NOTES.md"
 logger = logging.getLogger(__name__)
 
@@ -172,10 +171,6 @@ def month_key(timestamp: int) -> str:
 
 def month_start_unix(month: str) -> int:
     return int(datetime.strptime(month, "%Y-%m").replace(tzinfo=UTC).timestamp())
-
-
-def utc_date(timestamp: int) -> str:
-    return datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%d")
 
 
 def candidate_id_for(start_timestamp: int, end_timestamp: int) -> str:
@@ -553,65 +548,6 @@ def build_candidates(
     return ranked
 
 
-def apply_decisions(
-    candidates: Sequence[Candidate],
-    decisions: dict,
-) -> list[Candidate]:
-    """Apply frozen human review records onto regenerated candidates."""
-    reviewer = str(decisions.get("reviewer") or "")
-    decision_date = str(decisions.get("decision_date") or "")
-    records = list(decisions.get("decisions") or [])
-    used: set[int] = set()
-    by_index = list(candidates)
-
-    def matches(item: Candidate, spec: dict) -> bool:
-        if item.status not in REVIEW_FLOOR_STATUSES:
-            return False
-        if "start_timestamp" in spec and item.start_timestamp != int(
-            spec["start_timestamp"]
-        ):
-            return False
-        if "end_timestamp" in spec and item.end_timestamp != int(spec["end_timestamp"]):
-            return False
-        if "utc_date" in spec and utc_date(item.start_timestamp) != spec["utc_date"]:
-            return False
-        if "year" in spec and datetime.fromtimestamp(
-            item.start_timestamp, UTC
-        ).year != int(spec["year"]):
-            return False
-        if "min_duration_minutes" in spec:
-            return item.duration_minutes >= int(spec["min_duration_minutes"])
-        return True
-
-    for record in records:
-        match = record.get("match") or {}
-        hits = [
-            index
-            for index, item in enumerate(by_index)
-            if index not in used and matches(item, match)
-        ]
-        if not hits:
-            raise ValueError(f"no candidate matched decision {record!r}")
-        status = str(record["status"])
-        if status not in ALLOWED_LEDGER_STATUSES:
-            raise ValueError(f"unsupported decision status {status!r}")
-        for index in hits:
-            used.add(index)
-            item = by_index[index]
-            reference = str(record.get("reference") or item.reference)
-            if status == STATUS_REVIEWED_UNCONFIRMED:
-                reference = HEURISTIC_REFERENCE
-            by_index[index] = _with_status(
-                item,
-                status=status,
-                decision_date=str(record.get("decision_date") or decision_date),
-                reviewer=str(record.get("reviewer") or reviewer),
-                reference=reference,
-                notes_path=str(record.get("notes_path") or ""),
-            )
-    return by_index
-
-
 def read_candidates(path: str | Path) -> list[Candidate]:
     path = Path(path)
     if not path.exists():
@@ -733,10 +669,6 @@ def load_model(path: str | Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def load_decisions(path: str | Path) -> dict:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
 def _configure_logging() -> None:
     if logger.handlers:
         return
@@ -761,11 +693,6 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Freeze the snapshot at this Unix timestamp (inclusive).",
     )
-    parser.add_argument(
-        "--apply-decisions",
-        action="store_true",
-        help="Apply data/provenance/research/decisions.json after detection.",
-    )
     args = parser.parse_args(argv)
 
     from scripts.provenance import read_sidecar
@@ -781,11 +708,6 @@ def main(argv: list[str] | None = None) -> int:
     research_dir = Path(args.research_dir)
     existing = read_candidates(research_dir / CANDIDATES_FILENAME)
     candidates = build_candidates(scan, exclusions, existing_ledger=existing)
-    decisions_path = research_dir / DECISIONS_FILENAME
-    if args.apply_decisions:
-        if not decisions_path.is_file():
-            raise SystemExit(f"missing decisions file: {decisions_path}")
-        candidates = apply_decisions(candidates, load_decisions(decisions_path))
     committed = [
         _with_status(item, notes_path=NOTES_FILENAME)
         if item.status in PUBLISHED_STATUSES

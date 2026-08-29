@@ -15,7 +15,6 @@ from scripts.outage_candidates import (
     DetectorParams,
     MonthlyActivity,
     ZeroRun,
-    apply_decisions,
     classify_run,
     hash_ohlcv_prefix,
     infer_liquid_start,
@@ -130,26 +129,6 @@ def test_published_intervals_require_review() -> None:
     assert len(published) == 1
     assert published[0].flag == FLAG_SUSPECTED_OUTAGE
     assert published[0].reference == HEURISTIC_REFERENCE
-
-
-def test_apply_decisions_maps_utc_date(tmp_path: Path) -> None:
-    del tmp_path
-    pending = _candidate(start_timestamp=1391331660, end_timestamp=1391339520)
-    decisions = {
-        "reviewer": "local-investigation",
-        "decision_date": "2026-08-29",
-        "decisions": [
-            {
-                "match": {"utc_date": "2014-02-02"},
-                "status": STATUS_CORROBORATED,
-                "reference": "https://blog.bitstamp.net/post/scheduled-downtime/",
-                "notes_path": "NOTES.md",
-            }
-        ],
-    }
-    applied = apply_decisions([pending], decisions)
-    assert applied[0].status == STATUS_CORROBORATED
-    assert applied[0].reference.startswith("https://")
 
 
 def test_reference_classifiers() -> None:

@@ -66,7 +66,7 @@ Regenerate the candidate ledger and frozen model (local investigation; not
 part of the daily Action):
 
 ```bash
-uv run python scripts/outage_candidates.py --apply-decisions
+uv run python scripts/outage_candidates.py
 ```
 
 Validate the sidecar and ledger against current candles:
