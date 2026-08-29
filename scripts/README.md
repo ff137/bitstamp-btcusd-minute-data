@@ -2,50 +2,95 @@
 
 ## Original Data
 
-We download the original data from Kaggle:
-<https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data?resource=download&select=btcusd_1-min_data.csv>
+We use version 706 of the original Kaggle dataset:
+<https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data>
 
-Save this in `data/original/btcusd_1-min_data.csv`.
+Save this in `data/original/btcusd_1-min_data.csv`:
 
-> NB: At time of writing, there is a spurious false record in the very last row of the dataset.
-> Manually delete this, or use `sed -i '$ d' btcusd_1-min_data.csv` to remove it.
+```sh
+mkdir -p data/original
+curl -L "https://www.kaggle.com/api/v1/datasets/download/mczielinski/bitcoin-historical-data?datasetVersionNumber=706" \
+  | funzip > data/original/btcusd_1-min_data.csv
+```
+
+Check that you have the same file:
+
+```sh
+sha256sum data/original/btcusd_1-min_data.csv
+# expected: c3ea6522e69673da38baf88755644d546363e8a96ac60f9e7dafe003c890817f
+```
+
+We pin the version and checksum because a newer Kaggle version may contain
+different data. The full details are saved in
+[data/original/source-manifest.json](../data/original/source-manifest.json).
 
 ## Missing Data
 
-The original dataset has missing data, and a collection of gaps has graciously been shared:
+Older versions of the Kaggle file had gaps. A collection of those missing rows
+was shared here:
 <https://github.com/mczielinski/kaggle-bitcoin/issues/2#issuecomment-2577927918>
 
-Extract and save this in `data/original/missing_ohlc_data_all_gaps_as_of_1736148000.csv`.
+Version 706 already contains every row from that file, so it is no longer
+merged into the historical dataset.
 
-## Processing the Merged, Bulk Data
+## Checking the Source
 
-1. Follow the above download and save steps
-2. Run `python scripts/preprocess_bulk_data.py` to merge the gap data into the bulk data
+This checks the downloaded file and compares a small selection of candles with
+the Bitstamp API:
 
-The script will print out the missing timestamps (known issue), and truncate the data up to the first missing timestamp.
+```bash
+uv run python scripts/verify_source.py
+```
 
-Data integrity is validated (no duplicate timestamps, no missing values),
-and finally saved in `data/historical/btcusd_bitstamp_1min_2012-2025.csv`
+The comparison covers the DST changes from 2012 through 2024, the old
+timestamp boundary, and a few known gaps and outages. It does not download the
+full history from Bitstamp.
+
+## Processing the Bulk Data
+
+```bash
+uv run python scripts/preprocess_bulk_data.py
+```
+
+The script reads the Kaggle file one row at a time and copies the data through
+`2025-01-07 00:00 UTC`. It changes the column names to lowercase, but does not
+shift timestamps, merge the old gap file, or fill any rows.
+
+The result is saved directly in:
+`data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz`
 
 ## After Processing
 
-Inspect the data using `python scripts/inspect_data.py`.
+Check the result and its connection to the daily updates:
 
-Zip before uploading to github:
+```sh
+uv run python scripts/validate_dataset.py \
+  --historical-tail data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz \
+  --updates data/updates/btcusd_bitstamp_1min_latest.csv \
+  --expected-first 1325376060 \
+  --expected-last 1736208000 \
+  --expected-rows 6847200 \
+  --expected-sha256 1be152060b39327b669cbed236eeb283191fadaf3862f76c1e974be54ceb1a20
+```
+
+You can inspect it in more detail with:
 
 ```bash
-gzip -k data/historical/btcusd_bitstamp_1min_2012-2025.csv
+uv run python scripts/inspect_data.py bulk
 ```
 
 Now you're ready to run the update script:
 
 ```bash
-python scripts/update_data.py
+uv run python scripts/update_data.py
 ```
 
-This will save Bitstamp data since the bulk, historical dataset was last updated in a separate file,
-located in `data/updates/btcusd_bitstamp_1min_latest.csv`.
+This saves Bitstamp data since the bulk historical dataset was last updated in
+a separate file at `data/updates/btcusd_bitstamp_1min_latest.csv`.
+If Bitstamp leaves out a minute, the current update script keeps the grid
+complete with a flat candle at the previous close and zero volume.
 
 ## Want to Know More?
 
-See [.github/workflows/update-automation.yml](../.github/workflows/update-automation.yml) for how the data is kept up-to-date.
+See [.github/workflows/update-automation.yml](../.github/workflows/update-automation.yml)
+for how the data is kept up to date.

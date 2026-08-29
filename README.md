@@ -12,21 +12,35 @@ The historical dataset is saved in [data/historical/btcusd_bitstamp_1min_2012-20
 Some facts about the data:
 
 - **Date Range:** From 1 January 2012 to 7 January 2025.
-- **Number of Records:** 6,846,600
-- **File Size:** Approximately 90MB zipped, 326MB unzipped.
-- **Data Integrity:** No missing minutes, no duplicates, and no null values.
+- **Number of Records:** 6,847,200
+- **File Size:** Approximately 89MB zipped, 327MB unzipped.
+- **Data Integrity:** Complete 60-second grid, with no duplicate timestamps or null values.
 
 ### Data Preview
 
 Below is a preview of the first and last two rows of the bulk dataset:
 
-| timestamp  | open     | high     | low      | close    | volume   |
-| ---------- | -------- | -------- | -------- | -------- | -------- |
-| 1325412060 | 4.58     | 4.58     | 4.58     | 4.58     | 0.0      |
-| 1325412120 | 4.58     | 4.58     | 4.58     | 4.58     | 0.0      |
-| ...        | ...      | ...      | ...      | ...      | ...      |
-| 1736207940 | 102280.0 | 102280.0 | 102280.0 | 102280.0 | 0.007554 |
-| 1736208000 | 102278.0 | 102291.0 | 102263.0 | 102263.0 | 0.523107 |
+| timestamp  | open     | high     | low      | close    | volume     |
+| ---------- | -------- | -------- | -------- | -------- | ---------- |
+| 1325376060 | 4.58     | 4.58     | 4.58     | 4.58     | 0.0        |
+| 1325376120 | 4.58     | 4.58     | 4.58     | 4.58     | 0.0        |
+| ...        | ...      | ...      | ...      | ...      | ...        |
+| 1736207940 | 102280.0 | 102280.0 | 102280.0 | 102280.0 | 0.00755403 |
+| 1736208000 | 102278.0 | 102291.0 | 102263.0 | 102263.0 | 0.52310682 |
+
+> Note: We interpret `timestamp` as the open time of the interval in UTC, so
+> each row corresponds to `[timestamp, timestamp + 60s)`. This is backed by
+> Bitstamp trade and candle comparisons, but is not an official Bitstamp
+> guarantee.
+
+The historical file comes from version 706 of
+[Bitcoin Historical Data](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data)
+by Zielak (mczielinski), licensed under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Earlier copies
+of this repository had incorrect UTC timestamps before 08:01 UTC on
+13 September 2024; those rows have now been corrected. The MIT license in this
+repository applies to the code, while the historical data keeps its source
+license.
 
 ## Daily Updates
 
@@ -71,8 +85,8 @@ the repository root:
 uv sync
 ```
 
-We have a [sample script](scripts/inspect_data.py) for you to inspect the data integrity
-(validate that there are no missing minutes, no duplicates, no nulls, etc):
+We have a [sample script](scripts/inspect_data.py) for checking the timestamp
+range, duplicate timestamps, null values, and summary statistics:
 
 ```bash
 uv run python -m scripts.inspect_data merged
@@ -106,9 +120,9 @@ df.info()
 
 > Forked from [mczielinski/kaggle-bitcoin](https://github.com/mczielinski/kaggle-bitcoin) and fixed some issues.
 
-See [scripts/README.md](scripts/README.md) for more information on how this data was onboarded.
+See [scripts/README.md](scripts/README.md) for more information on how the historical dataset was onboarded.
 
-Go to [scripts/update_data.py](scripts/update_data.py) and
+Daily updates are fetched from the Bitstamp API. Go to [scripts/update_data.py](scripts/update_data.py) and
 [.github/workflows/update-automation.yml](.github/workflows/update-automation.yml)
 if you are curious about how the data is processed and kept up-to-date.
 
