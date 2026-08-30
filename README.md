@@ -28,7 +28,7 @@ Below is a preview of the first and last two rows of the bulk dataset:
 | 1736207940 | 102280.0 | 102280.0 | 102280.0 | 102280.0 | 0.00755403 |
 | 1736208000 | 102278.0 | 102291.0 | 102263.0 | 102263.0 | 0.52310682 |
 
-> Note: `timestamp` is the open time of the interval in UTC, so each row corresponds to `[timestamp, timestamp + 60s)`.
+> `timestamp` is the UTC open time. Each row corresponds to `[timestamp, timestamp + 60s)`.
 
 ## Daily Updates
 
@@ -53,7 +53,7 @@ or if you just want to see the extent of flat, zero-volume candles in the datase
 Quick takeaways:
 
 - The dataset goes back to 2012, when liquidity was very low. We don't try classify these quiet periods.
-- 2013 is when liquidity starts being good enough that a 30-minute period of zero-volume candles is fairly rare.
+- 2013 is when liquidity starts being good enough that a 30-minute period of zero-volume candles is rare.
 - After March 2013, there are no 4h+ periods of zero-volume candles that does _not_ correspond with a flagged incident. So the data provenance file is good enough to explain all 4h+ outages.
 - The longest period of downtime is 108 hours starting 5 January 2015, after a Bitstamp hot-wallet
 incident. Apart from that, there were two times that the exchange was not trading for ~1 day.

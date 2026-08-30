@@ -1,16 +1,27 @@
-## Publisher changes (first snapshot)
+In celebration of reaching 100 stars, we've revisited this repo and made some improvements:
 
-This is the first monthly full-history snapshot of Bitstamp BTC/USD 1-minute
-candles.
+### Daily updates now append instead of overwrite
 
-- Daily updates are ordinary Git commits of the growing updates file. The
-  publisher no longer force-pushes a rewritten daily history.
-- Repository tooling uses uv instead of Poetry.
-- The historical bulk file was rebuilt with correct UTC timestamps, fixing a
-  daylight-saving offset in earlier published minutes.
-- A sparse provenance sidecar records official Statuspage incidents and
-  maintenance, going-forward gap fills, and reviewed zero-volume intervals.
+Previously, daily updates were overwriting the git history each day, requiring a `git reset` to pull new changes. This was to prevent the git history from growing, but it's unnecessary.
 
-Later monthly releases omit this section. The snapshot assets below are the
-joined series through the completed UTC month, not a replacement of the daily
-files in the repository.
+Now, updates are appended. You can get the latest data with a regular `git pull`.
+
+### DST offset bug fix
+
+The historical dataset that we originally sourced from Kaggle used a local timezone for timestamps, introducing daylight savings time jumps. How this was missed before is beyond me.
+
+The data has been rebuilt with correct UTC timestamps, fixing the DST offsets.
+
+### Data Provenance
+
+Because we backfill missing minutes, there is an ambiguity problem from zero-volume candles.
+
+A zero-volume candle could mean that there were genuinely no trades in that minute (quiet period), or there is just a missing record for that minute (data provider issue), or the exchange was offline (outage or maintenance). All of these "look the same". That makes it difficult to trust the data, or to do the more rigorous data science work, where you may want to filter outages, or just know what a zero-volume candle means.
+
+To that end, we've added a "sidecar" that monitors Bitstamp status/incident pages, where we label the intervals with zero-volume minutes accordingly. This is saved in a separate, sparse CSV file, allowing you to distinguish between "known outages" and "suspected outages". It also gives more confidence in the overall quality of the dataset. See the readme section for more info.
+
+### Monthly releases
+
+This is the first full-history snapshot of the Bitstamp BTC/USD 1-minute candle data. It will get published every month, along with some stats about price changes, and info about outages that month.
+
+___
