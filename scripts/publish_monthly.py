@@ -1,7 +1,5 @@
 """Build and optionally publish a monthly Bitstamp BTC/USD snapshot release."""
 
-from __future__ import annotations
-
 import argparse
 import csv
 import gzip
@@ -13,7 +11,7 @@ import sys
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 if __package__ in {None, ""}:
@@ -23,7 +21,6 @@ from scripts.provenance import (
     ALLOWED_FLAGS,
     FLAG_CONFIRMED_OUTAGE,
     FLAG_SCHEDULED_MAINTENANCE,
-    FLAG_SOURCE_GAP_FILLED,
     FLAG_SUSPECTED_OUTAGE,
     Interval,
     read_sidecar,
@@ -41,6 +38,7 @@ from scripts.validate_dataset import (
 
 TAG_PREFIX = "bitstamp-btcusd-1m-"
 FIRST_RELEASE_TAG = "bitstamp-btcusd-1m-2026-08"
+HISTORY_START_LABEL = "January 2012"
 CSV_ASSET = "btcusd_bitstamp_1min.csv.gz"
 PARQUET_ASSET = "btcusd_bitstamp_1min.parquet"
 PROVENANCE_ASSET = "btcusd_bitstamp_1min_provenance.csv"
@@ -52,17 +50,10 @@ DEFAULT_UPDATES_PATH = Path("data/updates/btcusd_bitstamp_1min_latest.csv")
 DEFAULT_SIDECAR_PATH = Path("data/provenance/btcusd_bitstamp_1min.csv")
 PARQUET_BATCH_SIZE = 50_000
 HASH_CHUNK_SIZE = 1024 * 1024
-FLAG_NOTE_ORDER = (
-    FLAG_CONFIRMED_OUTAGE,
-    FLAG_SCHEDULED_MAINTENANCE,
-    FLAG_SUSPECTED_OUTAGE,
-    FLAG_SOURCE_GAP_FILLED,
-)
 FLAG_HEADINGS = {
     FLAG_CONFIRMED_OUTAGE: "Confirmed outages",
     FLAG_SCHEDULED_MAINTENANCE: "Scheduled maintenance",
     FLAG_SUSPECTED_OUTAGE: "Suspected outages",
-    FLAG_SOURCE_GAP_FILLED: "Source gap fills",
 }
 
 logger = logging.getLogger(__name__)
@@ -111,6 +102,7 @@ class MonthStats:
     high: Decimal | None = None
     low: Decimal | None = None
     volume_sum: Decimal = Decimal(0)
+    usd_volume: Decimal = Decimal(0)
     candle_count: int = 0
     zero_runs: list[ZeroRun] = field(default_factory=list)
     _zero_start: int | None = field(default=None, repr=False)
@@ -136,6 +128,7 @@ class MonthStats:
         self.high = high if self.high is None else max(self.high, high)
         self.low = low if self.low is None else min(self.low, low)
         self.volume_sum += volume
+        self.usd_volume += volume * Decimal(close_raw)
         self.candle_count += 1
         if volume == 0:
             if self._zero_start is None:
@@ -458,6 +451,83 @@ def write_join_assets(
     return row_count, first_timestamp, last_timestamp, stats
 
 
+def _count_noun(count: int, singular: str, plural: str) -> str:
+    return singular if count == 1 else plural
+
+
+def _grouped_number(value: Decimal, *, decimals: int) -> str:
+    quantum = Decimal(1) if decimals == 0 else Decimal(10) ** -decimals
+    quantized = value.quantize(quantum, rounding=ROUND_HALF_UP)
+    sign = "-" if quantized < 0 else ""
+    absolute = abs(quantized)
+    if decimals == 0:
+        return f"{sign}{int(absolute):,}"
+    text = format(absolute, "f")
+    if "." not in text:
+        whole, fraction = text, "0" * decimals
+    else:
+        whole, fraction = text.split(".", 1)
+        fraction = fraction.ljust(decimals, "0")[:decimals]
+    return f"{sign}{int(whole):,}.{fraction}"
+
+
+def format_btc_volume(volume: Decimal) -> str:
+    return _grouped_number(volume, decimals=1)
+
+
+def format_usd_volume(usd_volume: Decimal) -> str:
+    return f"${_grouped_number(usd_volume, decimals=0)}"
+
+
+def zero_run_status_note(
+    run: ZeroRun,
+    intervals: Sequence[Interval],
+) -> str:
+    labels: list[str] = []
+    if any(
+        interval.flag == FLAG_CONFIRMED_OUTAGE
+        and intervals_overlap(
+            run.start_timestamp,
+            run.end_timestamp,
+            interval.start_timestamp,
+            interval.end_timestamp,
+        )
+        for interval in intervals
+    ):
+        labels.append("confirmed outage")
+    if any(
+        interval.flag == FLAG_SCHEDULED_MAINTENANCE
+        and intervals_overlap(
+            run.start_timestamp,
+            run.end_timestamp,
+            interval.start_timestamp,
+            interval.end_timestamp,
+        )
+        for interval in intervals
+    ):
+        labels.append("scheduled maintenance")
+    return "".join(f" -- {label}" for label in labels)
+
+
+def overlaps_zero_run(interval: Interval, runs: Sequence[ZeroRun]) -> bool:
+    return any(
+        intervals_overlap(
+            interval.start_timestamp,
+            interval.end_timestamp,
+            run.start_timestamp,
+            run.end_timestamp,
+        )
+        for run in runs
+    )
+
+
+def format_status_row(interval: Interval) -> str:
+    return (
+        f"- {format_utc_range(interval.start_timestamp, interval.end_timestamp)}"
+        f"; {interval.reference}"
+    )
+
+
 def percent_change(first_open: str, last_close: str) -> Decimal:
     start = Decimal(first_open)
     if start == 0:
@@ -489,7 +559,11 @@ def render_notes(
         month.start_timestamp,
         month.end_timestamp,
     )
-    by_flag: dict[str, list[Interval]] = {flag: [] for flag in FLAG_NOTE_ORDER}
+    by_flag: dict[str, list[Interval]] = {
+        FLAG_CONFIRMED_OUTAGE: [],
+        FLAG_SCHEDULED_MAINTENANCE: [],
+        FLAG_SUSPECTED_OUTAGE: [],
+    }
     for interval in month_sidecar:
         if interval.flag in by_flag:
             by_flag[interval.flag].append(interval)
@@ -498,57 +572,76 @@ def render_notes(
     if intro_text:
         lines.append(intro_text.rstrip())
         lines.append("")
-    lines.append(f"# {month.tag}")
+    lines.append(f"# {month.label}")
     lines.append("")
     lines.append(
-        f"Full-history Bitstamp BTC/USD 1-minute snapshot through "
-        f"{datetime.fromtimestamp(month.last_minute, UTC):%Y-%m-%d %H:%M} UTC."
+        f"Full Bitstamp BTC/USD 1-minute history from {HISTORY_START_LABEL} "
+        f"through {month.label}."
     )
     lines.append("")
-    lines.append(f"## Price ({month.label}, UTC)")
+    lines.append(f"## Price summary for {month.label}")
     lines.append("")
     lines.append(f"- Open: {stats.first_open}")
     lines.append(f"- Close: {stats.last_close}")
     lines.append(f"- High: {stats.high}")
     lines.append(f"- Low: {stats.low}")
     lines.append(f"- Change: {change_text}")
-    lines.append(f"- Volume: {stats.volume_sum.normalize()} BTC")
-    lines.append(f"- Candles: {stats.candle_count}")
+    lines.append(
+        f"- Volume: {format_btc_volume(stats.volume_sum)} BTC / "
+        f"{format_usd_volume(stats.usd_volume)}"
+    )
     lines.append("")
-    lines.append("## Exchange status (sidecar)")
+    lines.append("## Exchange status")
     lines.append("")
-    for flag in FLAG_NOTE_ORDER:
-        lines.append(f"### {FLAG_HEADINGS[flag]}")
+    confirmed = by_flag[FLAG_CONFIRMED_OUTAGE]
+    lines.append(f"### {FLAG_HEADINGS[FLAG_CONFIRMED_OUTAGE]}")
+    lines.append("")
+    if not confirmed:
+        lines.append("None this month.")
         lines.append("")
-        rows = by_flag[flag]
-        if not rows:
-            lines.append("None this month.")
-            lines.append("")
-            continue
-        for interval in rows:
-            jump = interval.price_jump or "0"
-            lines.append(
-                f"- {format_utc_range(interval.start_timestamp, interval.end_timestamp)}"
-                f"; price_jump={jump}; {interval.reference}"
-            )
+    else:
+        for interval in confirmed:
+            lines.append(format_status_row(interval))
         lines.append("")
-    lines.append("## Zero-volume runs (data quality)")
+    maintenance = [
+        interval
+        for interval in by_flag[FLAG_SCHEDULED_MAINTENANCE]
+        if overlaps_zero_run(interval, stats.zero_runs)
+    ]
+    if maintenance:
+        lines.append(f"### {FLAG_HEADINGS[FLAG_SCHEDULED_MAINTENANCE]}")
+        lines.append("")
+        for interval in maintenance:
+            lines.append(format_status_row(interval))
+        lines.append("")
+    suspected = by_flag[FLAG_SUSPECTED_OUTAGE]
+    if suspected:
+        lines.append(f"### {FLAG_HEADINGS[FLAG_SUSPECTED_OUTAGE]}")
+        lines.append("")
+        for interval in suspected:
+            lines.append(format_status_row(interval))
+        lines.append("")
+    lines.append("## Zero-volume candle report")
     lines.append("")
     if not stats.zero_runs:
-        lines.append("No zero-volume minutes in this month.")
+        lines.append("No zero-volume candles this month.")
         lines.append("")
     else:
         total_minutes = sum(
             (run.end_timestamp - run.start_timestamp) // MINUTE_SECONDS
             for run in stats.zero_runs
         )
+        interval_word = _count_noun(len(stats.zero_runs), "interval", "intervals")
+        minute_word = _count_noun(total_minutes, "minute", "minutes")
         lines.append(
-            f"{len(stats.zero_runs)} contiguous run(s), {total_minutes} minute(s)."
+            f"{len(stats.zero_runs)} zero-volume {interval_word}, "
+            f"{total_minutes} {minute_word} total."
         )
         lines.append("")
         for run in stats.zero_runs:
             lines.append(
                 f"- {format_utc_range(run.start_timestamp, run.end_timestamp)}"
+                f"{zero_run_status_note(run, month_sidecar)}"
             )
         lines.append("")
     return "\n".join(lines)

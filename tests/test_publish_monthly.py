@@ -1,11 +1,10 @@
 """Tests for scripts/publish_monthly.py."""
 
-from __future__ import annotations
-
 import csv
 import gzip
 import json
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pyarrow as pa
@@ -14,7 +13,9 @@ import pytest
 
 from scripts.provenance import (
     FLAG_CONFIRMED_OUTAGE,
+    FLAG_SCHEDULED_MAINTENANCE,
     FLAG_SOURCE_GAP_FILLED,
+    FLAG_SUSPECTED_OUTAGE,
     Interval,
     write_sidecar,
 )
@@ -29,6 +30,8 @@ from scripts.publish_monthly import (
     build_snapshot,
     canonical_manifest_json,
     clip_sidecar,
+    format_btc_volume,
+    format_usd_volume,
     format_utc_range,
     is_utc_first_of_month,
     load_intro,
@@ -109,6 +112,12 @@ def test_parse_year_month_rejects_garbage() -> None:
         parse_year_month("2026/08")
 
 
+def test_volume_thousand_separators() -> None:
+    assert format_btc_volume(Decimal("52676.10918656")) == "52,676.1"
+    assert format_usd_volume(Decimal(3750512974)) == "$3,750,512,974"
+    assert format_usd_volume(Decimal("705.5")) == "$706"
+
+
 def test_join_cutoff_and_parquet(tmp_path: Path) -> None:
     start = 1_577_836_800
     month, historical_rows, updates_rows = six_minute_month(start)
@@ -171,8 +180,11 @@ def test_join_cutoff_and_parquet(tmp_path: Path) -> None:
     assert len(provenance_rows) == 2
     assert provenance_rows[1][3] == FLAG_CONFIRMED_OUTAGE
     assert "INTRO_SHOULD_NOT_APPEAR" not in result.notes
-    assert "No zero-volume minutes" not in result.notes
+    assert "No zero-volume candles this month." not in result.notes
+    assert "1 zero-volume interval, 1 minute total." in result.notes
     assert format_utc_range(start + 4 * 60, start + 5 * 60) in result.notes
+    assert "Source gap fills" not in result.notes
+    assert "updater:fill_missing_minutes" not in result.notes
 
 
 def test_short_tail_fails(tmp_path: Path) -> None:
@@ -236,14 +248,137 @@ def test_notes_empty_zeros_and_sidecar_groups() -> None:
             Interval(
                 start, start + 60, FLAG_CONFIRMED_OUTAGE, "https://stspg.io/a", "1.25"
             ),
+            Interval(
+                start,
+                start + 60,
+                FLAG_SOURCE_GAP_FILLED,
+                "updater:fill_missing_minutes",
+                "0",
+            ),
         ],
         intro_text=None,
     )
-    assert "No zero-volume minutes in this month." in notes
+    assert "# January 2020" in notes
+    assert (
+        "Full Bitstamp BTC/USD 1-minute history from January 2012 through January 2020."
+    ) in notes
+    assert "## Price summary for January 2020" in notes
+    assert "- Volume: 7.0 BTC / $706" in notes
+    assert "Volume (USD)" not in notes
+    assert "Candles:" not in notes
+    assert "## Exchange status" in notes
+    assert "(sidecar)" not in notes
+    assert "No zero-volume candles this month." in notes
     assert "Confirmed outages" in notes
-    assert "https://stspg.io/a" in notes
-    assert "None this month." in notes
+    assert f"- {format_utc_range(start, start + 60)}; https://stspg.io/a" in notes
+    assert "price_jump" not in notes
     assert "Change: +1.00%" in notes
+    assert "Suspected outages" not in notes
+    assert "Scheduled maintenance" not in notes
+    assert "Source gap fills" not in notes
+    assert "updater:fill_missing_minutes" not in notes
+
+
+def test_notes_zero_runs_annotate_status_overlap() -> None:
+    start = 1_577_836_800
+    month = MonthWindow(2020, 1, start, start + 4 * 60)
+    from scripts.publish_monthly import MonthStats
+
+    stats = MonthStats()
+    stats.add_row(start, "100", "100", "100", "100", "1")
+    stats.add_row(start + 60, "100", "100", "100", "100", "0")
+    stats.add_row(start + 120, "100", "100", "100", "100", "0")
+    stats.add_row(start + 180, "100", "100", "100", "100", "1")
+    stats.finish()
+    notes = render_notes(
+        month=month,
+        stats=stats,
+        sidecar=[
+            Interval(
+                start + 60,
+                start + 180,
+                FLAG_CONFIRMED_OUTAGE,
+                "https://stspg.io/a",
+                "0.10",
+            ),
+            Interval(
+                start + 60,
+                start + 120,
+                FLAG_SUSPECTED_OUTAGE,
+                "zero_volume>=60m",
+                "0.01",
+            ),
+        ],
+        intro_text=None,
+    )
+    assert "## Zero-volume candle report" in notes
+    assert "1 zero-volume interval, 2 minutes total." in notes
+    assert f"- {format_utc_range(start + 60, start + 180)} -- confirmed outage" in notes
+    assert "Suspected outages" in notes
+    assert "zero_volume>=60m" in notes
+    assert "price_jump" not in notes
+    assert "scheduled maintenance" not in notes
+
+
+def test_notes_zero_run_scheduled_maintenance_note() -> None:
+    start = 1_577_836_800
+    month = MonthWindow(2020, 1, start, start + 3 * 60)
+    from scripts.publish_monthly import MonthStats
+
+    stats = MonthStats()
+    stats.add_row(start, "100", "100", "100", "100", "0")
+    stats.add_row(start + 60, "100", "100", "100", "100", "1")
+    stats.add_row(start + 120, "100", "100", "100", "100", "1")
+    stats.finish()
+    notes = render_notes(
+        month=month,
+        stats=stats,
+        sidecar=[
+            Interval(
+                start,
+                start + 60,
+                FLAG_SCHEDULED_MAINTENANCE,
+                "https://stspg.io/m",
+                "0",
+            ),
+        ],
+        intro_text=None,
+    )
+    assert "1 zero-volume interval, 1 minute total." in notes
+    assert f"- {format_utc_range(start, start + 60)} -- scheduled maintenance" in notes
+    assert "### Scheduled maintenance" in notes
+    assert f"- {format_utc_range(start, start + 60)}; https://stspg.io/m" in notes
+    assert "price_jump" not in notes
+
+
+def test_notes_omit_maintenance_without_zero_overlap() -> None:
+    start = 1_577_836_800
+    month = MonthWindow(2020, 1, start, start + 3 * 60)
+    from scripts.publish_monthly import MonthStats
+
+    stats = MonthStats()
+    stats.add_row(start, "100", "100", "100", "100", "1")
+    stats.add_row(start + 60, "100", "100", "100", "100", "1")
+    stats.add_row(start + 120, "100", "100", "100", "100", "1")
+    stats.finish()
+    notes = render_notes(
+        month=month,
+        stats=stats,
+        sidecar=[
+            Interval(
+                start,
+                start + 60,
+                FLAG_SCHEDULED_MAINTENANCE,
+                "https://stspg.io/m",
+                "0.50",
+            ),
+        ],
+        intro_text=None,
+    )
+    assert "Scheduled maintenance" not in notes
+    assert "https://stspg.io/m" not in notes
+    assert "No zero-volume candles this month." in notes
+    assert "None this month." in notes
 
 
 def test_intro_only_for_first_tag(tmp_path: Path) -> None:
@@ -347,4 +482,8 @@ def test_first_release_intro_prepended(tmp_path: Path) -> None:
     )
     assert result.notes.startswith("## Publisher changes (first snapshot)")
     assert "Once-off intro." in result.notes
+    assert "# August 2026" in result.notes
+    assert (
+        "Full Bitstamp BTC/USD 1-minute history from January 2012 through August 2026."
+    ) in result.notes
     assert result.tag == FIRST_RELEASE_TAG
