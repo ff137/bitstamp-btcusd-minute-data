@@ -1,0 +1,63 @@
+name: Monthly snapshot release
+
+on:
+  workflow_call:
+    inputs:
+      year_month:
+        description: UTC month to publish (YYYY-MM)
+        required: true
+        type: string
+      publish:
+        description: Create the GitHub Release
+        required: false
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      year_month:
+        description: UTC month to publish (YYYY-MM)
+        required: true
+        type: string
+      publish:
+        description: Create the GitHub Release
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          prune-cache: false
+          cache-python: true
+          python-version: "3.14.7"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Build monthly snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          publish_flag=""
+          if [ "${{ inputs.publish }}" = "true" ]; then
+            publish_flag="--publish"
+          fi
+          uv run python scripts/publish_monthly.py \
+            --year-month "${{ inputs.year_month }}" \
+            --output-dir artifacts/monthly-snapshot \
+            $publish_flag

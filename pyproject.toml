@@ -8,6 +8,7 @@ authors = [{ name = "Mourits de Beer", email = "ff137@proton.me" }]
 requires-python = ">=3.11"
 dependencies = [
     "pandas>=2.3.3,<3.0.0",
+    "pyarrow>=21.0.0,<23.0.0",
     "requests>=2.34.2,<3.0.0",
 ]
 

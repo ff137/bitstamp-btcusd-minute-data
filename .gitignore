@@ -1,5 +1,6 @@
 data/original/*.csv
 data/historical/*.csv
+artifacts/
 
 .vscode/
 

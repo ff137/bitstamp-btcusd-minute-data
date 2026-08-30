@@ -96,6 +96,9 @@ runs in the liquid-regime review window are candidates only; they are
 published as `suspected_outage` after corroboration or explicit review, not
 by duration alone. See [PROVENANCE.md](PROVENANCE.md).
 
+Monthly full-history GitHub Releases are built by `scripts/publish_monthly.py`.
+See [MONTHLY_RELEASE.md](MONTHLY_RELEASE.md).
+
 ## Want to Know More?
 
 See [.github/workflows/update-automation.yml](../.github/workflows/update-automation.yml)
