@@ -126,13 +126,12 @@ def fetch_and_append_missing_data(
                 f"Retrieved {len(new_data)} records for interval {start_timestamp} to {window_end}"
             )
             df_new = pd.DataFrame(new_data)
-
-            df_new["timestamp"] = pd.to_numeric(df_new["timestamp"], errors="coerce")
+            df_new.columns = COLUMN_NAMES
+            for column in COLUMN_NAMES:
+                df_new[column] = pd.to_numeric(df_new[column], errors="coerce")
             logger.debug(
                 f"Timestamp range: {df_new['timestamp'].min()} to {df_new['timestamp'].max()}"
             )
-
-            df_new.columns = COLUMN_NAMES
             logger.debug(f"Sample data:\n{df_new.head()}\n")
 
             all_new_data.append(df_new)
