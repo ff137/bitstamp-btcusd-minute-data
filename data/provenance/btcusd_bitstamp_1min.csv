@@ -69,4 +69,5 @@ start_timestamp,end_timestamp,duration_minutes,flag,price_jump,reference
 1785921240,1785923640,40,confirmed_outage,0.03,https://stspg.io/m6ggx69kjpgp
 1786359600,1786453200,1560,scheduled_maintenance,1.06,https://stspg.io/nlwdwnm9yls5
 1787380200,1787411700,525,confirmed_outage,0.41,https://stspg.io/9xhvyj0vwnft
-1788164100,1788167700,60,scheduled_maintenance,,https://stspg.io/7brmg34v39g7
+1788164100,1788167700,60,scheduled_maintenance,0.56,https://stspg.io/7brmg34v39g7
+1788941700,1788945300,60,scheduled_maintenance,,https://stspg.io/z58864bzq4cr
