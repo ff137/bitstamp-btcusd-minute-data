@@ -73,8 +73,9 @@ file covers code only, not the data. The data terms are recorded in full in
   **CC BY-SA 4.0** with required attribution:
   "Zielak (mczielinski), Bitcoin Historical Data, Kaggle".
 - The daily updates (rows from Unix timestamp 1736208060 onward) are
-  collected directly from the public Bitstamp API by this repository and
-  are **CC BY 4.0**.
+  collected from the public Bitstamp API by this repository and are
+  **CC BY 4.0** with required attribution (suggested form):
+  "Bitstamp BTC/USD minute data, github.com/ff137/bitstamp-btcusd-minute-data".
 - Combined artifacts, such as the monthly full-history releases, contain
   the Kaggle-derived portion and are therefore **CC BY-SA 4.0**.
 
