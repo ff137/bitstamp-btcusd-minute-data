@@ -1,0 +1,51 @@
+# Data licensing terms
+
+The MIT license in [LICENSE](LICENSE) covers the code in this repository
+(scripts, workflows, and documentation). The data files are subject to the
+terms below. The machine-readable acquisition record behind these terms is
+[data/original/source-manifest.json](data/original/source-manifest.json).
+
+## Kaggle-derived history (rows through Unix timestamp 1736208000)
+
+The bulk historical file
+[data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz](data/historical/btcusd_bitstamp_1min_2012-2025.csv.gz)
+— every row up to and including Unix timestamp 1736208000
+(2025-01-07 00:00:00 UTC) — is derived from the Kaggle dataset
+[Bitcoin Historical Data](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data)
+by Zielak (mczielinski), dataset version 706, licensed under Creative
+Commons Attribution-ShareAlike 4.0 International
+([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)).
+
+- Required attribution: **"Zielak (mczielinski), Bitcoin Historical Data,
+  Kaggle"**.
+- Changes from the upstream dataset: validation, normalization to the
+  six-column schema (`timestamp,open,high,low,close,volume`), and a cut at
+  the last finalized minute before this repository's own API collection
+  begins.
+- This portion, and any adaptation of it, is distributed under
+  CC BY-SA 4.0, as ShareAlike requires.
+
+## API-collected updates (rows from Unix timestamp 1736208060 onward)
+
+Every row from Unix timestamp 1736208060 (2025-01-07 00:01:00 UTC) onward —
+the daily updates file
+[data/updates/btcusd_bitstamp_1min_latest.csv](data/updates/btcusd_bitstamp_1min_latest.csv)
+and all subsequent appends — is collected directly from the public Bitstamp
+API by this repository's own tooling and is licensed under Creative Commons
+Attribution 4.0 International
+([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+
+- Required attribution (CC BY 4.0), suggested form: **"Bitstamp BTC/USD
+  minute data, github.com/ff137/bitstamp-btcusd-minute-data"**.
+
+## Combined artifacts
+
+Any artifact that joins the two portions — for example the monthly
+full-history release assets — is an adaptation of the Kaggle-derived
+portion and is therefore distributed under CC BY-SA 4.0, with the same
+required attribution.
+
+## No affiliation
+
+Price data reflects trading on Bitstamp. This repository is not affiliated
+with, nor endorsed by, Bitstamp Ltd.

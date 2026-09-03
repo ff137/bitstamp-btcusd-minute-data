@@ -60,6 +60,27 @@ incident. Apart from that, there were two times that the exchange was not tradin
 
 See [scripts/PROVENANCE.md](scripts/PROVENANCE.md) for more details and notes.
 
+## Data Licensing
+
+The code in this repository is MIT-licensed (see [LICENSE](LICENSE)); that
+file covers code only, not the data. The data terms are recorded in full in
+[DATA_LICENSE](DATA_LICENSE):
+
+- The bulk history (rows through Unix timestamp 1736208000, i.e. up to
+  2025-01-07 00:00 UTC) is derived from the Kaggle dataset
+  [Bitcoin Historical Data](https://www.kaggle.com/datasets/mczielinski/bitcoin-historical-data)
+  by Zielak (mczielinski), dataset version 706, and is
+  **CC BY-SA 4.0** with required attribution:
+  "Zielak (mczielinski), Bitcoin Historical Data, Kaggle".
+- The daily updates (rows from Unix timestamp 1736208060 onward) are
+  collected directly from the public Bitstamp API by this repository and
+  are **CC BY 4.0**.
+- Combined artifacts, such as the monthly full-history releases, contain
+  the Kaggle-derived portion and are therefore **CC BY-SA 4.0**.
+
+The machine-readable acquisition record lives in
+[data/original/source-manifest.json](data/original/source-manifest.json).
+
 ## How Can I Use This Data?
 
 The simplest way to use the data is to clone the repository:
