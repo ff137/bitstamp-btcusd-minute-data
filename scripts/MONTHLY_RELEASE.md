@@ -11,7 +11,7 @@ Retry or dry-run from Actions: **Monthly snapshot release** (`workflow_dispatch`
 uv run python scripts/publish_monthly.py --year-month 2026-08 --output-dir artifacts/monthly-snapshot
 ```
 
-Assets: `btcusd_bitstamp_1min.csv.gz`, `btcusd_bitstamp_1min.parquet` (integer `timestamp`, string OHLC/volume), `btcusd_bitstamp_1min_provenance.csv` (sidecar clipped to the snapshot), `manifest.json`. Snapshot identity is the SHA-256 of the canonical manifest file.
+Assets: `btcusd_bitstamp_1min.csv.gz`, `btcusd_bitstamp_1min.parquet` (integer `timestamp`, float64 OHLC/volume), `btcusd_bitstamp_1min_provenance.csv` (sidecar clipped to the snapshot), `manifest.json`. Snapshot identity is the SHA-256 of the canonical manifest file.
 
 The first tag `bitstamp-btcusd-1m-2026-08` prepends `scripts/first_release_intro.md`. Later months do not.
 

@@ -70,10 +70,17 @@ def candle(timestamp: int, close: str, volume: str = "1") -> list[str]:
 def six_minute_month(
     start: int,
 ) -> tuple[MonthWindow, list[list[str]], list[list[str]]]:
+    # Real Bitstamp rows carry up to 8 decimal places; integer-valued
+    # prices would be exact even in float32, letting a writer that
+    # rounds or narrows slip past the equivalence guard.
     month = MonthWindow(2020, 1, start, start + 6 * 60)
-    historical = [candle(start + offset * 60, "100") for offset in range(3)]
+    historical = [candle(start + offset * 60, "13345.35117537") for offset in range(3)]
     updates = [
-        candle(start + (3 + offset) * 60, "110", "0" if offset == 1 else "2")
+        candle(
+            start + (3 + offset) * 60,
+            "13345.42906843",
+            "0" if offset == 1 else "5853.85216588",
+        )
         for offset in range(3)
     ]
     return month, historical, updates
@@ -185,6 +192,169 @@ def test_join_cutoff_and_parquet(tmp_path: Path) -> None:
     assert format_utc_range(start + 4 * 60, start + 5 * 60) in result.notes
     assert "Source gap fills" not in result.notes
     assert "updater:fill_missing_minutes" not in result.notes
+
+
+def build_six_minute_snapshot(tmp_path: Path) -> Path:
+    start = 1_577_836_800
+    month, historical_rows, updates_rows = six_minute_month(start)
+    historical, updates = write_pair(tmp_path, historical_rows, updates_rows)
+    sidecar = tmp_path / "sidecar.csv"
+    write_sidecar(sidecar, [])
+    intro = tmp_path / "intro.md"
+    intro.write_text("x\n", encoding="utf-8")
+    build_snapshot(
+        month=month,
+        historical_path=historical,
+        updates_path=updates,
+        sidecar_path=sidecar,
+        intro_path=intro,
+        output_dir=tmp_path / "out",
+        as_of="2026-09-01T00:10:00Z",
+        generation_revision="deadbeef",
+    )
+    return tmp_path / "out"
+
+
+def test_parquet_ohlcv_columns_are_typed(tmp_path: Path) -> None:
+    """The Parquet asset carries typed numerics, not the CSV's decimal text."""
+    start = 1_577_836_800
+    month = MonthWindow(2020, 1, start, start + 6 * 60)
+    historical_rows = [
+        [str(start), "7160.03", "7161.5", "7159.9", "7160.5", "0.06"],
+        [str(start + 60), "7160.5", "7162.1", "7160.0", "7161.0", "1.5"],
+        [str(start + 120), "7161.0", "7161.0", "7160.1", "7160.1", "0.75"],
+    ]
+    updates_rows = [
+        [str(start + 180), "7160.1", "7163.3", "7160.1", "7163.0", "2.25"],
+        [str(start + 240), "7163.0", "7163.0", "7162.2", "7162.5", "0.1"],
+        [str(start + 300), "7162.5", "7164.0", "7162.5", "7163.9", "3"],
+    ]
+    historical, updates = write_pair(tmp_path, historical_rows, updates_rows)
+    sidecar = tmp_path / "sidecar.csv"
+    write_sidecar(sidecar, [])
+    intro = tmp_path / "intro.md"
+    intro.write_text("x\n", encoding="utf-8")
+
+    result = build_snapshot(
+        month=month,
+        historical_path=historical,
+        updates_path=updates,
+        sidecar_path=sidecar,
+        intro_path=intro,
+        output_dir=tmp_path / "out",
+        as_of="2026-09-01T00:10:00Z",
+        generation_revision="deadbeef",
+    )
+
+    assert result.row_count == 6
+    table = pq.read_table(tmp_path / "out" / "btcusd_bitstamp_1min.parquet")
+    expected_schema = pa.schema(
+        [("timestamp", pa.int64())]
+        + [(name, pa.float64()) for name in OHLCV_HEADER[1:]]
+    )
+    assert table.schema.equals(expected_schema), str(table.schema)
+    all_rows = historical_rows + updates_rows
+    assert table.column("timestamp").to_pylist() == [int(row[0]) for row in all_rows]
+    for index, name in enumerate(OHLCV_HEADER[1:], start=1):
+        expected_values = [float(row[index]) for row in all_rows]
+        assert table.column(name).to_pylist() == expected_values, name
+
+
+def test_release_validation_pins_parquet_to_csv(tmp_path: Path) -> None:
+    """The post-build check accepts the built pair and refuses a doctored one."""
+    from scripts.publish_monthly import verify_parquet_matches_csv
+
+    output_dir = build_six_minute_snapshot(tmp_path)
+    csv_path = output_dir / "btcusd_bitstamp_1min.csv.gz"
+    parquet_path = output_dir / "btcusd_bitstamp_1min.parquet"
+
+    assert verify_parquet_matches_csv(csv_path, parquet_path) == 6
+
+    table = pq.read_table(parquet_path)
+    doctored_close = table.column("close").to_pylist()
+    doctored_close[3] += 0.5
+    doctored = table.set_column(
+        table.schema.get_field_index("close"),
+        "close",
+        pa.array(doctored_close, type=pa.float64()),
+    )
+    pq.write_table(doctored, parquet_path)
+    with pytest.raises(PublishError, match="row 3 does not match"):
+        verify_parquet_matches_csv(csv_path, parquet_path)
+
+    pq.write_table(table.slice(0, 5), parquet_path)
+    with pytest.raises(PublishError, match="more rows than"):
+        verify_parquet_matches_csv(csv_path, parquet_path)
+
+
+def test_release_validation_refuses_string_columns(tmp_path: Path) -> None:
+    """A Parquet with string OHLCV columns must be refused outright."""
+    from scripts.publish_monthly import verify_parquet_matches_csv
+
+    output_dir = build_six_minute_snapshot(tmp_path)
+    csv_path = output_dir / "btcusd_bitstamp_1min.csv.gz"
+    parquet_path = output_dir / "btcusd_bitstamp_1min.parquet"
+
+    table = pq.read_table(parquet_path)
+    strung = pa.table(
+        {
+            "timestamp": table.column("timestamp"),
+            **{
+                name: pa.array(
+                    [format(value, "g") for value in table.column(name).to_pylist()],
+                    type=pa.string(),
+                )
+                for name in OHLCV_HEADER[1:]
+            },
+        }
+    )
+    pq.write_table(strung, parquet_path)
+    with pytest.raises(PublishError, match="schema does not match"):
+        verify_parquet_matches_csv(csv_path, parquet_path)
+
+
+def test_build_refuses_a_corrupted_parquet_before_writing_the_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The equivalence guard is wired into the build, ahead of the manifest.
+
+    A writer that damages the Parquet must fail the whole build, and the
+    failure must land before manifest.json exists -- otherwise the guard
+    could be unhooked, or moved below the hash step, without any test
+    noticing.
+    """
+    from scripts import publish_monthly
+
+    real_flush = publish_monthly._flush_parquet_batch
+
+    def corrupting_flush(writer, rows: list[list[str]]) -> None:
+        damaged = [list(row) for row in rows]
+        if damaged:
+            damaged[0][4] = str(float(damaged[0][4]) + 0.5)
+        real_flush(writer, damaged)
+
+    monkeypatch.setattr(publish_monthly, "_flush_parquet_batch", corrupting_flush)
+
+    start = 1_577_836_800
+    month, historical_rows, updates_rows = six_minute_month(start)
+    historical, updates = write_pair(tmp_path, historical_rows, updates_rows)
+    sidecar = tmp_path / "sidecar.csv"
+    write_sidecar(sidecar, [])
+    intro = tmp_path / "intro.md"
+    intro.write_text("x\n", encoding="utf-8")
+
+    with pytest.raises(PublishError, match="row 0 does not match"):
+        build_snapshot(
+            month=month,
+            historical_path=historical,
+            updates_path=updates,
+            sidecar_path=sidecar,
+            intro_path=intro,
+            output_dir=tmp_path / "out",
+            as_of="2026-09-01T00:10:00Z",
+            generation_revision="deadbeef",
+        )
+    assert not (tmp_path / "out" / "manifest.json").exists()
 
 
 def test_short_tail_fails(tmp_path: Path) -> None:
