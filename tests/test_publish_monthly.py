@@ -70,10 +70,17 @@ def candle(timestamp: int, close: str, volume: str = "1") -> list[str]:
 def six_minute_month(
     start: int,
 ) -> tuple[MonthWindow, list[list[str]], list[list[str]]]:
+    # Real Bitstamp rows carry up to 8 decimal places; integer-valued
+    # prices would be exact even in float32, letting a writer that
+    # rounds or narrows slip past the equivalence guard.
     month = MonthWindow(2020, 1, start, start + 6 * 60)
-    historical = [candle(start + offset * 60, "100") for offset in range(3)]
+    historical = [candle(start + offset * 60, "13345.35117537") for offset in range(3)]
     updates = [
-        candle(start + (3 + offset) * 60, "110", "0" if offset == 1 else "2")
+        candle(
+            start + (3 + offset) * 60,
+            "13345.42906843",
+            "0" if offset == 1 else "5853.85216588",
+        )
         for offset in range(3)
     ]
     return month, historical, updates
@@ -304,6 +311,50 @@ def test_release_validation_refuses_string_columns(tmp_path: Path) -> None:
     pq.write_table(strung, parquet_path)
     with pytest.raises(PublishError, match="schema does not match"):
         verify_parquet_matches_csv(csv_path, parquet_path)
+
+
+def test_build_refuses_a_corrupted_parquet_before_writing_the_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The equivalence guard is wired into the build, ahead of the manifest.
+
+    A writer that damages the Parquet must fail the whole build, and the
+    failure must land before manifest.json exists -- otherwise the guard
+    could be unhooked, or moved below the hash step, without any test
+    noticing.
+    """
+    from scripts import publish_monthly
+
+    real_flush = publish_monthly._flush_parquet_batch
+
+    def corrupting_flush(writer, rows: list[list[str]]) -> None:
+        damaged = [list(row) for row in rows]
+        if damaged:
+            damaged[0][4] = str(float(damaged[0][4]) + 0.5)
+        real_flush(writer, damaged)
+
+    monkeypatch.setattr(publish_monthly, "_flush_parquet_batch", corrupting_flush)
+
+    start = 1_577_836_800
+    month, historical_rows, updates_rows = six_minute_month(start)
+    historical, updates = write_pair(tmp_path, historical_rows, updates_rows)
+    sidecar = tmp_path / "sidecar.csv"
+    write_sidecar(sidecar, [])
+    intro = tmp_path / "intro.md"
+    intro.write_text("x\n", encoding="utf-8")
+
+    with pytest.raises(PublishError, match="row 0 does not match"):
+        build_snapshot(
+            month=month,
+            historical_path=historical,
+            updates_path=updates,
+            sidecar_path=sidecar,
+            intro_path=intro,
+            output_dir=tmp_path / "out",
+            as_of="2026-09-01T00:10:00Z",
+            generation_revision="deadbeef",
+        )
+    assert not (tmp_path / "out" / "manifest.json").exists()
 
 
 def test_short_tail_fails(tmp_path: Path) -> None:
