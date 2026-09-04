@@ -3,9 +3,11 @@
 The bitstamp-btcusd-1m-2026-08 release shipped its Parquet with string
 OHLCV columns. The published asset stays as it is; this script builds a
 correctly typed companion (timestamp int64, OHLCV float64) from the
-release's own csv.gz and refuses to emit it unless
-``verify_parquet_matches_csv`` passes — the same fail-closed check the
-monthly build runs.
+release's own csv.gz. It writes to a temporary sibling path and moves
+the file to the requested output only after
+``verify_parquet_matches_csv`` — the same fail-closed check the monthly
+build runs — has passed, so a failed run leaves nothing at the output
+path (and never disturbs a file already there).
 """
 
 import argparse
@@ -26,23 +28,37 @@ from scripts.publish_monthly import (
 
 
 def write_typed_parquet(csv_path: Path, parquet_path: Path) -> int:
-    """Build a typed Parquet from ``csv_path`` and return the verified row count."""
+    """Build a typed Parquet from ``csv_path`` and return the verified row count.
+
+    Nothing reaches ``parquet_path`` unless verification passes: the file
+    is written to a temporary sibling, verified there, and renamed into
+    place, so a failure leaves the output path exactly as it was.
+    """
+    import os
+
     import pyarrow.parquet as pq
 
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    staging_path = parquet_path.with_name(parquet_path.name + ".unverified")
     batch: list[list[str]] = []
-    with pq.ParquetWriter(
-        parquet_path, _parquet_schema(), compression="zstd"
-    ) as writer:
-        for row in iter_ohlcv_rows(csv_path):
-            if len(row) != 6:
-                raise PublishError(f"expected 6 OHLCV columns, found {len(row)}")
-            batch.append(row)
-            if len(batch) >= PARQUET_BATCH_SIZE:
-                _flush_parquet_batch(writer, batch)
-                batch = []
-        _flush_parquet_batch(writer, batch)
-    return verify_parquet_matches_csv(csv_path, parquet_path)
+    try:
+        with pq.ParquetWriter(
+            staging_path, _parquet_schema(), compression="zstd"
+        ) as writer:
+            for row in iter_ohlcv_rows(csv_path):
+                if len(row) != 6:
+                    raise PublishError(f"expected 6 OHLCV columns, found {len(row)}")
+                batch.append(row)
+                if len(batch) >= PARQUET_BATCH_SIZE:
+                    _flush_parquet_batch(writer, batch)
+                    batch = []
+            _flush_parquet_batch(writer, batch)
+        row_count = verify_parquet_matches_csv(csv_path, staging_path)
+    except BaseException:
+        staging_path.unlink(missing_ok=True)
+        raise
+    os.replace(staging_path, parquet_path)
+    return row_count
 
 
 def main(argv: list[str] | None = None) -> int:

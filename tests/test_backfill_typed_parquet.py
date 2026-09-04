@@ -53,3 +53,42 @@ def test_main_reports_the_verified_count_and_fails_closed(
     with gzip.open(bad, mode="wt", encoding="utf-8", newline="") as handle:
         handle.write("not,a,valid,header\n")
     assert main([str(bad), str(tmp_path / "bad.parquet")]) == 1
+
+
+def test_a_corrupting_writer_fails_the_run_and_leaves_no_output(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """The equivalence guard is wired in, and failure emits nothing.
+
+    A writer that damages a value must fail the run through the guard
+    (not an upstream header check), and the output path must be left
+    exactly as it was -- absent, or holding its previous content -- so a
+    failed rerun can never plant a wrong file where a later upload
+    expects a verified one.
+    """
+    import scripts.backfill_typed_parquet as backfill
+    from scripts import publish_monthly
+
+    real_flush = publish_monthly._flush_parquet_batch
+
+    def corrupting_flush(writer, rows: list[list[str]]) -> None:
+        damaged = [list(row) for row in rows]
+        if damaged:
+            damaged[0][4] = str(float(damaged[0][4]) + 0.5)
+        real_flush(writer, damaged)
+
+    monkeypatch.setattr(backfill, "_flush_parquet_batch", corrupting_flush)
+
+    csv_path = tmp_path / "release.csv.gz"
+    write_csv_gz(csv_path)
+    parquet_path = tmp_path / "typed.parquet"
+
+    assert main([str(csv_path), str(parquet_path)]) == 1
+    assert "does not match" in capsys.readouterr().err
+    assert not parquet_path.exists()
+    assert list(tmp_path.glob("*.unverified")) == []
+
+    decoy = b"previous verified bytes"
+    parquet_path.write_bytes(decoy)
+    assert main([str(csv_path), str(parquet_path)]) == 1
+    assert parquet_path.read_bytes() == decoy
