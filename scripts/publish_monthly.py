@@ -735,13 +735,19 @@ def load_intro(path: Path, tag: str) -> str | None:
     return text
 
 
+def release_title(tag: str) -> str:
+    """Lead with the month: GitHub truncates long titles in release lists,
+    so the distinguishing part must come first."""
+    return f"{tag.removeprefix(TAG_PREFIX)} · Bitstamp BTC/USD 1-minute"
+
+
 def create_github_release(
     *,
     tag: str,
     notes_path: Path,
     output_dir: Path,
 ) -> None:
-    title = f"Bitstamp BTC/USD 1-minute · {tag.removeprefix(TAG_PREFIX)}"
+    title = release_title(tag)
     files = [
         output_dir / CSV_ASSET,
         output_dir / PARQUET_ASSET,

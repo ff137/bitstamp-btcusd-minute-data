@@ -38,6 +38,7 @@ from scripts.publish_monthly import (
     month_window,
     parse_year_month,
     previous_utc_month,
+    release_title,
     render_notes,
     run_publish,
     sha256_file,
@@ -117,6 +118,14 @@ def test_previous_month_and_first_day() -> None:
 def test_parse_year_month_rejects_garbage() -> None:
     with pytest.raises(PublishError):
         parse_year_month("2026/08")
+
+
+def test_release_title_leads_with_the_month() -> None:
+    """GitHub truncates release titles; the month must come first."""
+    assert (
+        release_title("bitstamp-btcusd-1m-2026-08")
+        == "2026-08 · Bitstamp BTC/USD 1-minute"
+    )
 
 
 def test_volume_thousand_separators() -> None:
