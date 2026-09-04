@@ -372,11 +372,11 @@ def _parquet_schema():
     return pa.schema(
         [
             ("timestamp", pa.int64()),
-            ("open", pa.string()),
-            ("high", pa.string()),
-            ("low", pa.string()),
-            ("close", pa.string()),
-            ("volume", pa.string()),
+            ("open", pa.float64()),
+            ("high", pa.float64()),
+            ("low", pa.float64()),
+            ("close", pa.float64()),
+            ("volume", pa.float64()),
         ]
     )
 
@@ -388,11 +388,10 @@ def _flush_parquet_batch(writer, rows: list[list[str]]) -> None:
         return
     arrays = [
         pa.array([int(row[0]) for row in rows], type=pa.int64()),
-        pa.array([row[1] for row in rows], type=pa.string()),
-        pa.array([row[2] for row in rows], type=pa.string()),
-        pa.array([row[3] for row in rows], type=pa.string()),
-        pa.array([row[4] for row in rows], type=pa.string()),
-        pa.array([row[5] for row in rows], type=pa.string()),
+        *(
+            pa.array([float(row[index]) for row in rows], type=pa.float64())
+            for index in range(1, 6)
+        ),
     ]
     writer.write_table(pa.Table.from_arrays(arrays, schema=_parquet_schema()))
 
@@ -449,6 +448,57 @@ def write_join_assets(
             f"expected {month.expected_candles}"
         )
     return row_count, first_timestamp, last_timestamp, stats
+
+
+def verify_parquet_matches_csv(csv_path: Path, parquet_path: Path) -> int:
+    """Fail closed unless the Parquet mirrors the csv.gz under typed parsing.
+
+    Equivalence means an identical row count and, per row, the Int64
+    timestamp and the IEEE-754 binary64 value of each OHLCV decimal text
+    field. Runs after every build so a writer regression is caught before
+    the manifest hashes the asset.
+    """
+    import pyarrow.parquet as pq
+
+    parquet_file = pq.ParquetFile(parquet_path)
+    actual_schema = parquet_file.schema_arrow
+    expected_schema = _parquet_schema()
+    if not actual_schema.equals(expected_schema):
+        found = str(actual_schema).replace("\n", ", ")
+        raise PublishError(
+            f"{parquet_path.name} schema does not match the release contract: "
+            f"found {found}"
+        )
+
+    row_count = 0
+    with open_dataset(csv_path) as handle:
+        reader = csv.reader(handle)
+        header = next(reader, None)
+        if header != list(COLUMN_NAMES):
+            raise PublishError(
+                f"{csv_path.name}: expected OHLCV header {','.join(COLUMN_NAMES)}"
+            )
+        for batch in parquet_file.iter_batches():
+            columns = [column.to_pylist() for column in batch.columns]
+            for offset in range(batch.num_rows):
+                row = next(reader, None)
+                if row is None:
+                    raise PublishError(
+                        f"{parquet_path.name} has more rows than {csv_path.name}"
+                    )
+                expected = [int(row[0]), *(float(value) for value in row[1:6])]
+                actual = [column[offset] for column in columns]
+                if actual != expected:
+                    raise PublishError(
+                        f"{parquet_path.name} row {row_count} does not match "
+                        f"{csv_path.name}: {actual!r} != {expected!r}"
+                    )
+                row_count += 1
+        if next(reader, None) is not None:
+            raise PublishError(
+                f"{csv_path.name} has more rows than {parquet_path.name}"
+            )
+    return row_count
 
 
 def _count_noun(count: int, singular: str, plural: str) -> str:
@@ -754,6 +804,11 @@ def build_snapshot(
     if first_timestamp != dataset_start:
         raise PublishError(
             f"joined first timestamp {first_timestamp} != historical start {dataset_start}"
+        )
+    verified_rows = verify_parquet_matches_csv(csv_path, parquet_path)
+    if verified_rows != row_count:
+        raise PublishError(
+            f"verified row count {verified_rows} != written row count {row_count}"
         )
 
     sidecar = read_sidecar(sidecar_path)
