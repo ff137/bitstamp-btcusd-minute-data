@@ -73,5 +73,5 @@ start_timestamp,end_timestamp,duration_minutes,flag,price_jump,reference
 1788941700,1788945300,60,scheduled_maintenance,0.12,https://stspg.io/z58864bzq4cr
 1789462800,1789464600,30,scheduled_maintenance,0.11,https://stspg.io/1gr8m4x5f0gl
 1789981200,1789983000,30,scheduled_maintenance,0.89,https://stspg.io/1wdc8c8jv061
-1790136000,1790143200,120,scheduled_maintenance,,https://stspg.io/z35q5fjx8tvw
+1790136000,1790143200,120,scheduled_maintenance,0.25,https://stspg.io/z35q5fjx8tvw
 1790755200,1791878400,18720,scheduled_maintenance,,https://stspg.io/lcs9c0nzpljy
