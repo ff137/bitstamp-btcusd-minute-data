@@ -1,9 +1,11 @@
 """Fail when tracked text contains a workspace marker.
 
 Every path from `git ls-files` is read. A file is binary, and skipped, only
-when its bytes contain a NUL in the first 8192 bytes. Filenames, extensions,
-and size are not consulted. Lockfiles in `EXCLUSIONS` are the only named
-skips. In this file, only the line that states the regex literal is skipped.
+when its bytes contain a NUL in the first 8192 bytes. Every other file is
+decoded as UTF-8 with surrogateescape, so a non-UTF-8 byte does not hide
+the ASCII around it. Lockfiles in `EXCLUSIONS` are the only named skips.
+In this file, only a stripped line that starts with `PATTERN = re.compile(`
+is skipped.
 """
 
 import re
@@ -26,10 +28,10 @@ EXCLUSIONS = {
 }
 
 
-def tracked_paths() -> list[str]:
+def tracked_paths(repo: Path) -> list[str]:
     completed = subprocess.run(
         ["git", "ls-files", "-z"],
-        cwd=REPO,
+        cwd=repo,
         check=True,
         capture_output=True,
     )
@@ -43,22 +45,21 @@ def is_binary(path: Path) -> bool:
 
 
 def is_pattern_definition(rel: str, line: str) -> bool:
-    return rel == THIS_FILE and PATTERN.pattern in line
+    return rel == THIS_FILE and line.strip().startswith("PATTERN = re.compile(")
 
 
-def marker_hits() -> list[str]:
+def marker_hits(repo: Path = REPO) -> list[str]:
     hits: list[str] = []
-    for rel in tracked_paths():
+    for rel in tracked_paths(repo):
         if Path(rel).name in EXCLUSIONS:
             continue
-        path = REPO / rel
+        path = repo / rel
         if not path.is_file() or is_binary(path):
             continue
-        try:
-            with path.open(encoding="utf-8", newline="") as handle:
-                lines = handle.readlines()
-        except UnicodeDecodeError:
-            continue
+        with path.open(
+            encoding="utf-8", errors="surrogateescape", newline=""
+        ) as handle:
+            lines = handle.readlines()
         for number, line in enumerate(lines, start=1):
             if is_pattern_definition(rel, line):
                 continue
@@ -72,3 +73,15 @@ def test_tracked_text_has_no_workspace_markers() -> None:
         assert "\n" not in reason and reason.strip(), name
     hits = marker_hits()
     assert not hits, "\n".join(hits)
+
+
+def test_non_utf8_ascii_marker_is_caught(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)
+    marker = "md" + "board"
+    (repo / "notes.txt").write_bytes(b"\xff" + marker.encode("ascii") + b"\n")
+    subprocess.run(
+        ["git", "add", "notes.txt"], cwd=repo, check=True, capture_output=True
+    )
+    assert marker_hits(repo) == ["notes.txt:1"]
