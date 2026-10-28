@@ -2,7 +2,9 @@
 
 import csv
 import gzip
+import hashlib
 import json
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -595,7 +597,12 @@ def test_if_due_skips_when_not_first_day(tmp_path: Path) -> None:
     assert "first UTC day" in result.skip_reason
 
 
-def test_manifest_identity_is_hash_of_file(tmp_path: Path) -> None:
+def test_manifest_identity_is_hash_of_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # gzip stores time.time() in the csv.gz header, and the manifest hashes
+    # that file. Hold the clock so the second build is comparable.
+    monkeypatch.setattr(time, "time", lambda: 0)
     start = 1_577_836_800
     month, historical_rows, updates_rows = six_minute_month(start)
     historical, updates = write_pair(tmp_path, historical_rows, updates_rows)
@@ -623,7 +630,23 @@ def test_manifest_identity_is_hash_of_file(tmp_path: Path) -> None:
     assert payload["tag"] == month.tag
     assert payload["generation_revision"] == "deadbeef"
     assert "sha256" in payload["assets"]["btcusd_bitstamp_1min.csv.gz"]
-    assert sha256_file(manifest_path) == sha256_file(manifest_path)
+    digest = hashlib.sha256(
+        canonical_manifest_json(result.manifest).encode()
+    ).hexdigest()
+    assert sha256_file(manifest_path) == digest
+
+    build_snapshot(
+        month=month,
+        historical_path=historical,
+        updates_path=updates,
+        sidecar_path=sidecar,
+        intro_path=intro,
+        output_dir=tmp_path / "out-repeat",
+        as_of="2026-09-01T00:10:00Z",
+        generation_revision="deadbeef",
+    )
+    repeat_path = tmp_path / "out-repeat" / MANIFEST_ASSET
+    assert sha256_file(repeat_path) == sha256_file(manifest_path)
 
 
 def test_clip_sidecar_clips_end_to_window() -> None:
