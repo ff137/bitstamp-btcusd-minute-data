@@ -4,7 +4,7 @@ python = "3.14.7"
 uv = "0.12.6"
 
 [settings]
-install_before = "7d"  # only install versions released more than 7 days ago
+minimum_release_age = "7d"  # only install versions released more than 7 days ago
 experimental = true
 jobs = 1
 
